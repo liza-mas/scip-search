@@ -1,0 +1,33 @@
+[
+  {
+    "desc": "`scip-search` query planners can receive a traversal-ready view of the caller-selected SCIP index through the official Go SCIP bindings without owning protobuf parsing.",
+    "done_when": "A Story Writer can specify implementation stories where the traversal layer accepts the shared loaded-index boundary, uses official SCIP Go binding types, and exposes index metadata, documents, document symbols, external symbols, and occurrences to query planners without command-specific behavior.",
+    "scope": "Official SCIP binding input, index metadata, document inventory, document symbols, external symbols, and occurrence inventory. Excludes CLI command routing, shared index-path validation, query-specific filtering, final JSON schemas, and persistence beyond the current process.",
+    "spec_ref": "README.md#language-support",
+    "epic_ref": "specs/epics/readme/20260517-100328-epic-planning-2.md#capability-cap-001---load-scip-index-data-for-query-traversal"
+  },
+  {
+    "desc": "`scip-search` query planners can retrieve source ranges, document paths, symbol roles, and hover documentation for matched SCIP symbols and occurrences.",
+    "done_when": "A Story Writer can specify implementation stories where traversal exposes document paths, occurrence ranges, enclosing ranges, position encoding, symbol role bitsets, symbol kind, display name, documentation, signature documentation, and occurrence override documentation for downstream query planners.",
+    "scope": "Source-location and hover-related metadata preservation for traversal consumers. Excludes final CLI JSON field names, pretty-printing, editor-specific coordinate conversion beyond preserving SCIP semantics, and reading source files to supplement absent document text.",
+    "spec_ref": "README.md#language-support",
+    "epic_ref": "specs/epics/readme/20260517-100328-epic-planning-2.md#capability-cap-002---preserve-source-locations-and-hover-metadata",
+    "depends_on": ["0"]
+  },
+  {
+    "desc": "`scip-search` query planners can ask traversal views for occurrences and SCIP symbol relationships needed to resolve references, definitions, implementations, and related symbols.",
+    "done_when": "A Story Writer can specify implementation stories where traversal exposes occurrence lookup by symbol and relationship lookup by symbol, including definition role data and SCIP relationship edge kinds needed by reference and implementation planners.",
+    "scope": "Reusable occurrence and relationship lookup views for query planners. Excludes final references and implementations algorithms, missing-symbol behavior, result grouping, duplicate elimination policy, JSON schemas, synthesized relationships, and cross-index resolution.",
+    "spec_ref": "README.md#language-support",
+    "epic_ref": "specs/epics/readme/20260517-100328-epic-planning-2.md#capability-cap-003---expose-occurrence-and-relationship-lookup-views",
+    "depends_on": ["0", "1"]
+  },
+  {
+    "desc": "`scip-search` maintainers can validate traversal stories against deterministic SCIP fixtures that cover documents, occurrences, symbols, relationships, ranges, and hover metadata used by downstream query planners.",
+    "done_when": "A Story Writer can specify fixture stories that create schema-valid SCIP payloads and validate coverage for documents, occurrences, symbols, relationships, ranges, and hover metadata needed by downstream query-planner stories.",
+    "scope": "Shared deterministic traversal fixture requirements and coverage validation. Excludes external indexer installation, full CLI command tests, large real-world repository fixtures, performance benchmarks, final command JSON golden files, and ctags fallback data.",
+    "spec_ref": "README.md#language-support",
+    "epic_ref": "specs/epics/readme/20260517-100328-epic-planning-2.md#capability-cap-004---provide-traversal-fixtures-for-scip-data-coverage",
+    "depends_on": ["0", "1", "2"]
+  }
+]
