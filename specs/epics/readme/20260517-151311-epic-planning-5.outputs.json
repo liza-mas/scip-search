@@ -1,0 +1,35 @@
+[
+  {
+    "desc": "`scip-search` users can install a requested released version on macOS or Linux into a chosen binary directory and verify the installed executable without needing a local clone.",
+    "done_when": "The release install stories specify latest-release, explicit VERSION, and INSTALL_DIR behavior for macOS/Linux, observable installed-executable success, actionable install failures, and version-based verification without requiring a local clone or SCIP index generation.",
+    "scope": "Release installer behavior for latest and explicit versions, custom install directories, executable availability, release install failure reporting, and installed binary verification. Excludes branch builds, local clone builds, language indexer installation, query execution, package manager formulas, container images, signing, notarization, and release hosting setup.",
+    "spec_ref": "README.md#installation",
+    "epic_ref": "specs/epics/readme/20260517-151311-epic-planning-5.md#capability-cap-001---install-released-scip-search-binaries"
+  },
+  {
+    "desc": "`scip-search` contributors and early adopters can build from a local clone or requested branch with Go and make, then install the resulting CLI through the same user-facing path.",
+    "done_when": "The source workflow stories specify BRANCH-based installer builds and local clone make install behavior, including Go/make prerequisite handling, successful installed binary outcomes, and failure cases without provisioning host tools or redefining release artifact downloads.",
+    "scope": "Source-based installation through BRANCH and local clone make install workflows, prerequisite checks for caller-provided Go and make, source build success and failure behavior, and installed CLI outcome. Excludes release binary download behavior, cross-compilation, CI publication, package manager formulas, query command validation, and installing Go, make, or language indexers.",
+    "spec_ref": "README.md#installation",
+    "epic_ref": "specs/epics/readme/20260517-151311-epic-planning-5.md#capability-cap-002---build-and-install-from-source-workflows"
+  },
+  {
+    "desc": "`scip-search` users and automation can run `scip-search --version` and receive version information that identifies the installed build well enough to confirm installation and release provenance.",
+    "done_when": "The version stories specify top-level `scip-search --version` behavior that runs without an index, reports the installed build identity for release and source builds, exits successfully on valid invocation, and supports install verification without redefining query JSON or runtime error contracts.",
+    "scope": "`--version` invocation behavior, observable version output, release and source build provenance, install verification, and non-index execution. Excludes query payload schemas, semantic versioning policy beyond reported build identity, network release lookups, and health checks requiring SCIP indexes.",
+    "spec_ref": "README.md#installation",
+    "epic_ref": "specs/epics/readme/20260517-151311-epic-planning-5.md#capability-cap-003---report-cli-version-information"
+  },
+  {
+    "desc": "`scip-search` maintainers can keep README installation guidance, release-facing validation commands, and packaging tests aligned with the supported install, source build, and version workflows.",
+    "done_when": "The documentation and validation stories specify README installation examples, release validation commands, and packaging tests covering release install, source install, custom install directory, and `--version` workflows while excluding query-specific and traversal-specific validation.",
+    "scope": "README installation documentation, user-facing prerequisite notes, release-facing validation commands, packaging tests for supported distribution workflows, and drift checks between docs and install behavior. Excludes query-specific fixtures, traversal fixtures, real indexer execution, unsupported packaging channels, release approval policy, changelog policy, hosted release setup, signing, and notarization.",
+    "spec_ref": "README.md#installation",
+    "epic_ref": "specs/epics/readme/20260517-151311-epic-planning-5.md#capability-cap-004---document-and-validate-distribution-workflows",
+    "depends_on": [
+      "0",
+      "1",
+      "2"
+    ]
+  }
+]
