@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"slices"
+	"strings"
 	"testing"
 
 	runtimecontract "scip-search/internal/runtime"
+	"scip-search/internal/version"
 )
 
 func TestDocumentedCommandsRouteThroughSharedRegistry(t *testing.T) {
@@ -92,6 +94,93 @@ func TestRunWithUnsupportedCommandReturnsUsageBeforeLoaderOrHandlers(t *testing.
 		t.Fatalf("loader calls = %d, want 0", loader.calls)
 	}
 	assertNoHandlerCalls(t, handlers)
+}
+
+func TestRunVersionBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		identity version.BuildIdentity
+		want     []string
+	}{
+		{
+			name: "release build",
+			identity: version.BuildIdentity{
+				Release: "v9.8.7",
+			},
+			want: []string{"scip-search", "release", "v9.8.7"},
+		},
+		{
+			name: "source build",
+			identity: version.BuildIdentity{
+				SourceRef:      "main",
+				SourceRevision: "abc123",
+			},
+			want: []string{"scip-search", "source", "main", "abc123"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			loader := &recordingLoader{}
+			handlers := newRecordingHandlers()
+			cliRuntime := NewRuntimeWithBuildIdentity(loader, handlers, test.identity)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := cliRuntime.Run([]string{"--version"}, &stdout, &stderr)
+
+			if status != runtimecontract.StatusOK {
+				t.Fatalf("Run(--version) status = %d, want %d", status, runtimecontract.StatusOK)
+			}
+			if stdout.String() == "" {
+				t.Fatal("stdout is empty, want version identity")
+			}
+			for _, want := range test.want {
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
+				}
+			}
+			if stderr.String() != "" {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+			if loader.calls != 0 {
+				t.Fatalf("loader calls = %d, want 0", loader.calls)
+			}
+			assertNoHandlerCalls(t, handlers)
+			assertNotQueryJSON(t, stdout.String())
+		})
+	}
+}
+
+func TestRunVersionDistinguishesReleaseFromSourceBuilds(t *testing.T) {
+	t.Parallel()
+
+	releaseRuntime := NewRuntimeWithBuildIdentity(&recordingLoader{}, newRecordingHandlers(), version.BuildIdentity{
+		Release: "v1.0.0",
+	})
+	sourceRuntime := NewRuntimeWithBuildIdentity(&recordingLoader{}, newRecordingHandlers(), version.BuildIdentity{
+		SourceRef:      "main",
+		SourceRevision: "def456",
+	})
+	var releaseStdout bytes.Buffer
+	var sourceStdout bytes.Buffer
+
+	releaseStatus := releaseRuntime.Run([]string{"--version"}, &releaseStdout, io.Discard)
+	sourceStatus := sourceRuntime.Run([]string{"--version"}, &sourceStdout, io.Discard)
+
+	if releaseStatus != runtimecontract.StatusOK {
+		t.Fatalf("release --version status = %d, want %d", releaseStatus, runtimecontract.StatusOK)
+	}
+	if sourceStatus != runtimecontract.StatusOK {
+		t.Fatalf("source --version status = %d, want %d", sourceStatus, runtimecontract.StatusOK)
+	}
+	if releaseStdout.String() == sourceStdout.String() {
+		t.Fatalf("release and source version output both = %q, want distinct output", releaseStdout.String())
+	}
 }
 
 func TestRunRequiresIndexForEveryDocumentedCommand(t *testing.T) {
@@ -310,5 +399,14 @@ func assertSingleJSONValue(t *testing.T, output []byte, want map[string]string) 
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		t.Fatalf("stdout contains extra JSON or non-JSON content after first value: %v", err)
+	}
+}
+
+func assertNotQueryJSON(t *testing.T, output string) {
+	t.Helper()
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(output), &decoded); err == nil {
+		t.Fatalf("stdout = %q, want human-readable version output instead of query JSON", output)
 	}
 }

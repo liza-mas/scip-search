@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	runtimecontract "scip-search/internal/runtime"
+	"scip-search/internal/version"
 )
 
 var documentedCommands = []string{
@@ -27,8 +28,9 @@ type Handler interface {
 
 // Runtime owns shared CLI command routing and invocation-shape failures.
 type Runtime struct {
-	loader   Loader
-	registry map[string]Handler
+	loader        Loader
+	registry      map[string]Handler
+	buildIdentity version.BuildIdentity
 }
 
 // RoutedCommand is the documented command selected from the shared registry.
@@ -39,6 +41,11 @@ type RoutedCommand struct {
 
 // NewRuntime builds a runtime with exactly the documented query command names.
 func NewRuntime(loader Loader, handlers map[string]Handler) Runtime {
+	return NewRuntimeWithBuildIdentity(loader, handlers, version.Current())
+}
+
+// NewRuntimeWithBuildIdentity builds a runtime with explicit offline build provenance.
+func NewRuntimeWithBuildIdentity(loader Loader, handlers map[string]Handler, buildIdentity version.BuildIdentity) Runtime {
 	registry := make(map[string]Handler, len(documentedCommands))
 	for _, name := range documentedCommands {
 		handler, ok := handlers[name]
@@ -48,8 +55,9 @@ func NewRuntime(loader Loader, handlers map[string]Handler) Runtime {
 	}
 
 	return Runtime{
-		loader:   loader,
-		registry: registry,
+		loader:        loader,
+		registry:      registry,
+		buildIdentity: buildIdentity,
 	}
 }
 
@@ -73,6 +81,14 @@ func (rt Runtime) Route(args []string) (RoutedCommand, []string, bool) {
 
 // Run validates shared invocation shape, loads the selected index, and executes one handler.
 func (rt Runtime) Run(args []string, stdout io.Writer, stderr io.Writer) runtimecontract.Status {
+	if len(args) > 0 && args[0] == "--version" {
+		if _, err := fmt.Fprintln(stdout, version.Format(rt.buildIdentity)); err != nil {
+			return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+		}
+
+		return runtimecontract.StatusOK
+	}
+
 	routed, commandArgs, ok := rt.Route(args)
 	if !ok && len(args) == 0 {
 		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure("missing command"))
