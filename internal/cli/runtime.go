@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	runtimecontract "scip-search/internal/runtime"
+	"scip-search/internal/scipindex"
 	"scip-search/internal/version"
 )
 
@@ -42,6 +43,16 @@ type RoutedCommand struct {
 // NewRuntime builds a runtime with exactly the documented query command names.
 func NewRuntime(loader Loader, handlers map[string]Handler) Runtime {
 	return NewRuntimeWithBuildIdentity(loader, handlers, version.Current())
+}
+
+// NewProductionRuntime builds a runtime backed by the production SCIP index loader.
+func NewProductionRuntime(handlers map[string]Handler) Runtime {
+	return NewProductionRuntimeWithBuildIdentity(handlers, version.Current())
+}
+
+// NewProductionRuntimeWithBuildIdentity builds a production-loader runtime with explicit build provenance.
+func NewProductionRuntimeWithBuildIdentity(handlers map[string]Handler, buildIdentity version.BuildIdentity) Runtime {
+	return NewRuntimeWithBuildIdentity(scipindex.NewLoader(), handlers, buildIdentity)
 }
 
 // NewRuntimeWithBuildIdentity builds a runtime with explicit offline build provenance.

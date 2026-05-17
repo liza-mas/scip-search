@@ -24,7 +24,7 @@ func runWithBuildIdentity(
 	stderr io.Writer,
 	buildIdentity version.BuildIdentity,
 ) runtimecontract.Status {
-	cliRuntime := cli.NewRuntimeWithBuildIdentity(unimplementedLoader{}, map[string]cli.Handler{
+	cliRuntime := cli.NewProductionRuntimeWithBuildIdentity(map[string]cli.Handler{
 		"symbols":         unimplementedHandler{},
 		"references":      unimplementedHandler{},
 		"implementations": unimplementedHandler{},
@@ -32,12 +32,6 @@ func runWithBuildIdentity(
 	}, buildIdentity)
 
 	return cliRuntime.Run(args, stdout, stderr)
-}
-
-type unimplementedLoader struct{}
-
-func (unimplementedLoader) Load(_ string) (any, error) {
-	return nil, errors.New("index loading is not implemented")
 }
 
 type unimplementedHandler struct{}
