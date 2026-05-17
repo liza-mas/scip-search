@@ -498,6 +498,141 @@ func TestNewViewPreservesPresentEmptyEnclosingRangeWhenBindingExposesIt(t *testi
 	}
 }
 
+func TestNewViewExposesRelationshipsOwnedByExactSymbol(t *testing.T) {
+	t.Parallel()
+
+	localOwner := "scip-go gomod example.com/project . cmd/Owner#"
+	externalOwner := "scip-go gomod example.com/dependency v1.2.3 dep/ExternalOwner#"
+	otherOwner := "scip-go gomod example.com/project . cmd/OtherOwner#"
+	emptyOwner := "scip-go gomod example.com/project . cmd/EmptyOwner#"
+	referenceTarget := "scip-go gomod example.com/project . cmd/ReferenceTarget#"
+	implementationTarget := "scip-go gomod example.com/project . cmd/ImplementationTarget#"
+	typeDefinitionTarget := "scip-go gomod example.com/dependency v1.2.3 dep/TypeTarget#"
+	multiFlagTarget := "scip-go gomod example.com/dependency v1.2.3 dep/MultiFlagTarget#"
+	otherTarget := "scip-go gomod example.com/project . cmd/OtherTarget#"
+
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath: "cmd/owners.go",
+					Symbols: []*scip.SymbolInformation{
+						{
+							Symbol: localOwner,
+							Relationships: []*scip.Relationship{
+								{Symbol: referenceTarget, IsReference: true},
+								{Symbol: implementationTarget, IsImplementation: true},
+							},
+						},
+						{
+							Symbol: emptyOwner,
+						},
+						{
+							Symbol: otherOwner,
+							Relationships: []*scip.Relationship{
+								{Symbol: otherTarget, IsDefinition: true},
+							},
+						},
+					},
+				},
+			},
+			ExternalSymbols: []*scip.SymbolInformation{
+				{
+					Symbol: externalOwner,
+					Relationships: []*scip.Relationship{
+						{Symbol: typeDefinitionTarget, IsTypeDefinition: true},
+						{
+							Symbol:           multiFlagTarget,
+							IsReference:      true,
+							IsImplementation: true,
+							IsTypeDefinition: true,
+							IsDefinition:     true,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	localRelationships := view.RelationshipsOwnedBy(localOwner)
+	if len(localRelationships) != 2 {
+		t.Fatalf("local owner relationship count = %d, want 2", len(localRelationships))
+	}
+	assertRelationshipFact(t, localRelationships, Relationship{
+		SourceSymbol: localOwner,
+		TargetSymbol: referenceTarget,
+		IsReference:  true,
+	})
+	assertRelationshipFact(t, localRelationships, Relationship{
+		SourceSymbol:     localOwner,
+		TargetSymbol:     implementationTarget,
+		IsImplementation: true,
+	})
+	assertNoRelationshipTarget(t, localRelationships, otherTarget)
+
+	externalRelationships := view.RelationshipsOwnedBy(externalOwner)
+	if len(externalRelationships) != 2 {
+		t.Fatalf("external owner relationship count = %d, want 2", len(externalRelationships))
+	}
+	assertRelationshipFact(t, externalRelationships, Relationship{
+		SourceSymbol:     externalOwner,
+		TargetSymbol:     typeDefinitionTarget,
+		IsTypeDefinition: true,
+	})
+	assertRelationshipFact(t, externalRelationships, Relationship{
+		SourceSymbol:     externalOwner,
+		TargetSymbol:     multiFlagTarget,
+		IsReference:      true,
+		IsImplementation: true,
+		IsTypeDefinition: true,
+		IsDefinition:     true,
+	})
+
+	if got := view.RelationshipsOwnedBy(emptyOwner); len(got) != 0 {
+		t.Fatalf("empty owner relationships = %+v, want empty result", got)
+	}
+	if got := view.RelationshipsOwnedBy("scip-go gomod example.com/project . cmd/Missing#"); len(got) != 0 {
+		t.Fatalf("absent owner relationships = %+v, want empty result", got)
+	}
+}
+
+func TestRelationshipOwnerLookupReturnsCopies(t *testing.T) {
+	t.Parallel()
+
+	owner := "scip-go gomod example.com/project . cmd/Owner#"
+	target := "scip-go gomod example.com/project . cmd/Target#"
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					Symbols: []*scip.SymbolInformation{
+						{
+							Symbol: owner,
+							Relationships: []*scip.Relationship{
+								{Symbol: target, IsReference: true},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	relationships := view.RelationshipsOwnedBy(owner)
+	if len(relationships) != 1 {
+		t.Fatalf("relationship count = %d, want 1", len(relationships))
+	}
+	relationships[0].TargetSymbol = "mutated"
+	relationships[0].IsReference = false
+
+	again := view.RelationshipsOwnedBy(owner)
+	assertRelationshipFact(t, again, Relationship{
+		SourceSymbol: owner,
+		TargetSymbol: target,
+		IsReference:  true,
+	})
+}
+
 func TestNewViewEnumerationIsDeterministicAndReturnsCopies(t *testing.T) {
 	t.Parallel()
 
@@ -577,6 +712,28 @@ func collectOccurrenceSymbols(occurrences []Occurrence) []string {
 		collected = append(collected, occurrence.Symbol)
 	}
 	return collected
+}
+
+func assertRelationshipFact(t *testing.T, relationships []Relationship, want Relationship) {
+	t.Helper()
+
+	for _, relationship := range relationships {
+		if relationship == want {
+			return
+		}
+	}
+
+	t.Fatalf("relationships = %+v, want relationship %+v", relationships, want)
+}
+
+func assertNoRelationshipTarget(t *testing.T, relationships []Relationship, target string) {
+	t.Helper()
+
+	for _, relationship := range relationships {
+		if relationship.TargetSymbol == target {
+			t.Fatalf("relationships = %+v, want no relationship targeting %q", relationships, target)
+		}
+	}
 }
 
 func traversalTestIndex() *scip.Index {

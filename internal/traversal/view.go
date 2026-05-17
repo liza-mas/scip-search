@@ -10,10 +10,11 @@ import (
 )
 
 type View struct {
-	metadata        Metadata
-	documents       []Document
-	externalSymbols []Symbol
-	occurrences     []Occurrence
+	metadata             Metadata
+	documents            []Document
+	externalSymbols      []Symbol
+	occurrences          []Occurrence
+	relationshipsByOwner map[string][]Relationship
 }
 
 func NewView(loaded runtimecontract.LoadedIndex) View {
@@ -24,22 +25,28 @@ func NewView(loaded runtimecontract.LoadedIndex) View {
 
 	documents := make([]Document, 0, len(index.GetDocuments()))
 	var occurrences []Occurrence
+	relationshipsByOwner := map[string][]Relationship{}
 	for _, document := range index.GetDocuments() {
 		documentFact := buildDocument(document)
 		occurrences = append(occurrences, documentFact.Occurrences...)
 		documents = append(documents, documentFact)
+		for _, symbol := range document.GetSymbols() {
+			appendRelationships(relationshipsByOwner, symbol)
+		}
 	}
 
 	externalSymbols := make([]Symbol, 0, len(index.GetExternalSymbols()))
 	for _, symbol := range index.GetExternalSymbols() {
 		externalSymbols = append(externalSymbols, buildSymbol(symbol, SymbolSourceExternal, ""))
+		appendRelationships(relationshipsByOwner, symbol)
 	}
 
 	return View{
-		metadata:        buildMetadata(index.GetMetadata()),
-		documents:       documents,
-		externalSymbols: externalSymbols,
-		occurrences:     occurrences,
+		metadata:             buildMetadata(index.GetMetadata()),
+		documents:            documents,
+		externalSymbols:      externalSymbols,
+		occurrences:          occurrences,
+		relationshipsByOwner: relationshipsByOwner,
 	}
 }
 
@@ -64,6 +71,10 @@ func (view View) ExternalSymbols() []Symbol {
 
 func (view View) Occurrences() []Occurrence {
 	return cloneOccurrences(view.occurrences)
+}
+
+func (view View) RelationshipsOwnedBy(sourceSymbol string) []Relationship {
+	return cloneRelationships(view.relationshipsByOwner[sourceSymbol])
 }
 
 func buildMetadata(metadata *scip.Metadata) Metadata {
@@ -128,6 +139,20 @@ func buildOccurrence(occurrence *scip.Occurrence, document Document) Occurrence 
 	}
 }
 
+func appendRelationships(relationshipsByOwner map[string][]Relationship, symbol *scip.SymbolInformation) {
+	ownerSymbol := symbol.GetSymbol()
+	for _, relationship := range symbol.GetRelationships() {
+		relationshipsByOwner[ownerSymbol] = append(relationshipsByOwner[ownerSymbol], Relationship{
+			SourceSymbol:     ownerSymbol,
+			TargetSymbol:     relationship.GetSymbol(),
+			IsReference:      relationship.GetIsReference(),
+			IsImplementation: relationship.GetIsImplementation(),
+			IsTypeDefinition: relationship.GetIsTypeDefinition(),
+			IsDefinition:     relationship.GetIsDefinition(),
+		})
+	}
+}
+
 func cloneDocuments(documents []Document) []Document {
 	if documents == nil {
 		return nil
@@ -172,6 +197,10 @@ func cloneOccurrences(occurrences []Occurrence) []Occurrence {
 	}
 
 	return cloned
+}
+
+func cloneRelationships(relationships []Relationship) []Relationship {
+	return slices.Clone(relationships)
 }
 
 func cloneSignatureDocumentation(document *scip.Document) *scip.Document {

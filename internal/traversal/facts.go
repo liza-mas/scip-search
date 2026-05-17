@@ -37,6 +37,15 @@ type Symbol struct {
 	EnclosingSymbol        string
 }
 
+type Relationship struct {
+	SourceSymbol     string
+	TargetSymbol     string
+	IsReference      bool
+	IsImplementation bool
+	IsTypeDefinition bool
+	IsDefinition     bool
+}
+
 type Occurrence struct {
 	DocumentPath          string
 	DocumentLanguage      string
