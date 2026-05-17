@@ -1,0 +1,27 @@
+[
+  {
+    "desc": "`scip-search` users can query `symbols --name <name>` with a partial symbol name and receive deterministic matches that include the full SCIP symbol strings needed by later symbol-based commands.",
+    "done_when": "The symbol discovery stories specify deterministic literal partial-name matching, multi-match and empty-result behavior, stable ordering, and a successful JSON payload whose `symbols` entries include exact full SCIP symbol strings plus matching context without redefining shared runtime failures.",
+    "scope": "`symbols --name` matching semantics, full SCIP symbol string return behavior, symbol result JSON payload fields, ambiguous and empty successful results, and symbol-query fixture expectations. Excludes references, implementations, fuzzy search, regex search, semantic similarity, cross-index matching, shared runtime behavior, and raw SCIP traversal construction.",
+    "spec_ref": "README.md#scip-symbol-format",
+    "epic_ref": "specs/epics/readme/20260517-134857-epic-planning-3.md#capability-cap-001---resolve-partial-symbol-names"
+  },
+  {
+    "desc": "`scip-search` users can run `packages` with or without `--prefix` and receive deterministic package identities for the indexed packages that match the requested prefix.",
+    "done_when": "The package discovery stories specify all-package listing, literal package-name prefix filtering, de-duplication, empty-result behavior, stable ordering, and a successful JSON payload whose `packages` entries expose package identity components without redefining shared runtime failures.",
+    "scope": "`packages` output behavior, optional `--prefix` filtering by package-name prefix, package identity de-duplication, package result JSON payload fields, empty successful results, and package-query fixture expectations. Excludes registry queries, dependency graph analysis, version resolution, non-package filters, shared runtime behavior, and raw SCIP traversal construction.",
+    "spec_ref": "README.md#scip-symbol-format",
+    "epic_ref": "specs/epics/readme/20260517-134857-epic-planning-3.md#capability-cap-002---list-indexed-packages-with-prefix-filtering"
+  },
+  {
+    "desc": "`scip-search` maintainers can validate symbol and package query stories against deterministic SCIP fixtures and golden JSON cases that cover matching, filtering, empty results, and ambiguous names.",
+    "done_when": "The fixture stories specify deterministic SCIP query fixtures and golden JSON cases that cover symbol partial matching, ambiguous names, package prefix filtering, de-duplication, empty successful results, and stable output ordering for both discovery commands.",
+    "scope": "Query-specific symbol and package fixtures, golden JSON cases, and validation coverage for matching, filtering, empty results, ambiguous names, de-duplication, and ordering. Excludes shared runtime fixtures, shared traversal fixture coverage, reference or implementation query fixtures, large real-world fixtures, performance benchmarks, external indexer installation, and ctags fallback fixtures.",
+    "spec_ref": "README.md#scip-symbol-format",
+    "epic_ref": "specs/epics/readme/20260517-134857-epic-planning-3.md#capability-cap-003---validate-discovery-queries-with-fixtures",
+    "depends_on": [
+      "0",
+      "1"
+    ]
+  }
+]
