@@ -14,6 +14,7 @@ type View struct {
 	documents             []Document
 	externalSymbols       []Symbol
 	occurrences           []Occurrence
+	occurrencesBySymbol   map[string][]Occurrence
 	relationshipsByOwner  map[string][]Relationship
 	relationshipsByTarget map[string][]Relationship
 }
@@ -26,11 +27,15 @@ func NewView(loaded runtimecontract.LoadedIndex) View {
 
 	documents := make([]Document, 0, len(index.GetDocuments()))
 	var occurrences []Occurrence
+	occurrencesBySymbol := map[string][]Occurrence{}
 	relationshipsByOwner := map[string][]Relationship{}
 	relationshipsByTarget := map[string][]Relationship{}
 	for _, document := range index.GetDocuments() {
 		documentFact := buildDocument(document)
 		occurrences = append(occurrences, documentFact.Occurrences...)
+		for _, occurrence := range documentFact.Occurrences {
+			occurrencesBySymbol[occurrence.Symbol] = append(occurrencesBySymbol[occurrence.Symbol], occurrence)
+		}
 		documents = append(documents, documentFact)
 		for _, symbol := range document.GetSymbols() {
 			appendRelationships(relationshipsByOwner, relationshipsByTarget, symbol)
@@ -48,6 +53,7 @@ func NewView(loaded runtimecontract.LoadedIndex) View {
 		documents:             documents,
 		externalSymbols:       externalSymbols,
 		occurrences:           occurrences,
+		occurrencesBySymbol:   occurrencesBySymbol,
 		relationshipsByOwner:  relationshipsByOwner,
 		relationshipsByTarget: relationshipsByTarget,
 	}
@@ -74,6 +80,10 @@ func (view View) ExternalSymbols() []Symbol {
 
 func (view View) Occurrences() []Occurrence {
 	return cloneOccurrences(view.occurrences)
+}
+
+func (view View) OccurrencesForSymbol(symbol string) []Occurrence {
+	return cloneOccurrences(view.occurrencesBySymbol[symbol])
 }
 
 func (view View) RelationshipsOwnedBy(sourceSymbol string) []Relationship {

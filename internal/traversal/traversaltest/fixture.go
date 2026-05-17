@@ -98,12 +98,7 @@ func (fixture Fixture) ExternalSymbolByName(t testing.TB, symbolName string) tra
 func (fixture Fixture) OccurrencesBySymbol(t testing.TB, symbolName string) []traversal.Occurrence {
 	t.Helper()
 
-	var occurrences []traversal.Occurrence
-	for _, occurrence := range fixture.View.Occurrences() {
-		if occurrence.Symbol == symbolName {
-			occurrences = append(occurrences, occurrence)
-		}
-	}
+	occurrences := fixture.View.OccurrencesForSymbol(symbolName)
 	if len(occurrences) == 0 {
 		t.Fatalf("shared traversal fixture missing occurrence category for symbol %q", symbolName)
 	}
