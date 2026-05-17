@@ -1,0 +1,42 @@
+[
+  {
+    "desc": "`scip-search` has an `internal/traversal` view builder that accepts the runtime loaded SCIP index boundary and exposes invocation-local index metadata and document inventories without owning loading or command behavior.",
+    "done_when": "Unit tests in `internal/traversal` pass asserting a loaded official SCIP index from `internal/scipindex` can build a traversal view; planners can enumerate index metadata and every document exactly once with relative path, language, position encoding, and empty or populated occurrence collections preserved; empty document inventories remain data rather than runtime errors; the builder does not accept raw paths, read index files, write stdout/stderr, persist derived data, or apply command-specific filtering or JSON shaping.",
+    "scope": "In scope: `internal/traversal` package entrypoint, `View` or equivalent builder API, index metadata fact type, document fact type, integration with the `internal/scipindex` loaded context, and colocated unit tests using in-memory official SCIP binding data. Out of scope: raw SCIP path loading or protobuf byte parsing, CLI routing, stream/status behavior, symbol metadata beyond document inventory references, occurrence lookup maps, relationship lookup indexes, fixture authoring, source-file reads, custom persisted formats, daemon/watch/cache behavior, query matching/filtering, and final command JSON schemas.",
+    "spec_ref": "specs/stories/readme/20260517-100328-epic-planning-2/CAP-001-01-scip-binding-input.md",
+    "plan_ref": "specs/plans/readme/20260517-194839-epic-planning-2-architecture-code-planning-0.md",
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-1"
+    ]
+  },
+  {
+    "desc": "`scip-search` traversal exposes document-level symbol, external symbol, and occurrence inventories from official SCIP data while preserving full symbol strings, local or external source, and containing document context.",
+    "done_when": "Unit tests in `internal/traversal` pass asserting every document-level `SymbolInformation` entry and every index-level external symbol is represented as a symbol fact with the full SCIP symbol string and local-or-external source preserved; every document occurrence is represented as an occurrence fact associated with its containing document and referenced SCIP symbol string; empty document-symbol, external-symbol, and occurrence inventories are exposed as empty collections without placeholder facts; repeated enumeration over the same loaded index is deterministic; traversal does not resolve partial names, package prefixes, reference semantics, implementation semantics, or final JSON fields.",
+    "scope": "In scope: document-level symbol facts, external symbol facts, occurrence facts, local/external source tagging, symbol string preservation, occurrence-to-document association, deterministic process-local enumeration, and colocated unit tests. Out of scope: source-location range enrichment beyond fields already exposed by Task 1, hover metadata enrichment, relationship lookup indexes, exact-symbol occurrence lookup maps, query-specific matching/filtering, final command JSON schemas, source-file reads, raw path loading, custom persisted formats, daemon/watch/cache behavior, and fixture authoring.",
+    "spec_ref": "specs/stories/readme/20260517-100328-epic-planning-2/CAP-001-02-document-and-symbol-inventory.md",
+    "plan_ref": "specs/plans/readme/20260517-194839-epic-planning-2-architecture-code-planning-0.md",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` traversal occurrence facts preserve SCIP source-location metadata, enclosing-range presence or absence, and symbol-role bitsets together with the containing document path and position encoding.",
+    "done_when": "Unit tests in `internal/traversal` pass asserting each occurrence fact retains the containing document relative path and position encoding, the exact SCIP range value, the ability to distinguish three-integer same-line ranges from four-integer multi-position ranges, optional enclosing range presence or absence without inventing defaults, and the raw SCIP symbol-role bitset; missing or empty SCIP document text does not cause traversal to read source files; traversal does not convert coordinates, decide definition/reference/implementation meanings, format paths or positions for JSON, or apply command-specific filtering.",
+    "scope": "In scope: occurrence range preservation, enclosing range optionality, role bitset preservation, containing document path and position encoding access from occurrence facts, source-file-read avoidance tests, and colocated unit tests. Out of scope: validating or repairing malformed SCIP range arrays beyond preserving loaded official data, relationship lookup, implementation or reference selection, syntax highlighting or diagnostics display, final command JSON fields, source-file reads, raw path loading, custom persisted formats, daemon/watch/cache behavior, and fixture authoring.",
+    "spec_ref": "specs/stories/readme/20260517-100328-epic-planning-2/CAP-002-01-source-range-normalization.md",
+    "plan_ref": "specs/plans/readme/20260517-194839-epic-planning-2-architecture-code-planning-0.md",
+    "depends_on": [
+      "1"
+    ]
+  },
+  {
+    "desc": "`scip-search` traversal symbol and occurrence facts preserve SCIP hover metadata, including symbol kind, display name, documentation, signature documentation, enclosing symbol metadata, and occurrence override documentation, without rendering or merging it.",
+    "done_when": "Unit tests in `internal/traversal` pass asserting document-level and external symbol facts retain full SCIP symbol string, local-or-external source, kind, display name, documentation entries, signature documentation, and enclosing symbol metadata; occurrence facts retain present override documentation entries and preserve absent override documentation as absence or an empty collection without copying symbol documentation; symbol-level documentation and occurrence override documentation remain distinguishable; traversal does not render Markdown, flatten signature documentation into display text, read source files for missing docs, choose command response fields, or apply query-specific matching.",
+    "scope": "In scope: hover metadata fields on symbol facts, occurrence override documentation fields, preservation of empty or absent documentation, distinction between symbol-level and occurrence-level documentation, and colocated unit tests. Out of scope: relationship lookup behavior, command-specific documentation precedence, Markdown rendering, signature pretty-printing, final CLI JSON schemas, query-specific matching/filtering, source-file reads, raw path loading, custom persisted formats, daemon/watch/cache behavior, and fixture authoring.",
+    "spec_ref": "specs/stories/readme/20260517-100328-epic-planning-2/CAP-002-02-hover-metadata-access.md",
+    "plan_ref": "specs/plans/readme/20260517-194839-epic-planning-2-architecture-code-planning-0.md",
+    "depends_on": [
+      "2"
+    ]
+  }
+]
