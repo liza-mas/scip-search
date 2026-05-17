@@ -7,6 +7,7 @@ import (
 
 	"scip-search/internal/cli"
 	runtimecontract "scip-search/internal/runtime"
+	"scip-search/internal/version"
 )
 
 func main() {
@@ -14,12 +15,21 @@ func main() {
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) runtimecontract.Status {
-	cliRuntime := cli.NewRuntime(unimplementedLoader{}, map[string]cli.Handler{
+	return runWithBuildIdentity(args, stdout, stderr, version.Current())
+}
+
+func runWithBuildIdentity(
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	buildIdentity version.BuildIdentity,
+) runtimecontract.Status {
+	cliRuntime := cli.NewRuntimeWithBuildIdentity(unimplementedLoader{}, map[string]cli.Handler{
 		"symbols":         unimplementedHandler{},
 		"references":      unimplementedHandler{},
 		"implementations": unimplementedHandler{},
 		"packages":        unimplementedHandler{},
-	})
+	}, buildIdentity)
 
 	return cliRuntime.Run(args, stdout, stderr)
 }
