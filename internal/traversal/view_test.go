@@ -23,9 +23,16 @@ func TestNewViewBuildsFromLoadedRuntimeIndexAndPreservesTraversalFacts(t *testin
 
 	metadata := view.Metadata()
 	if metadata.ToolName != "scip-search-test" ||
+		metadata.ToolVersion != "v1" ||
 		metadata.ProjectRoot != "file:///workspace" ||
 		metadata.TextDocumentEncoding != scip.TextEncoding_UTF8 {
 		t.Fatalf("metadata = %+v, want tool, project root, and encoding preserved", metadata)
+	}
+	if metadata.ProtocolVersion != scip.ProtocolVersion_UnspecifiedProtocolVersion {
+		t.Fatalf("protocol version = %v, want preserved SCIP protocol version", metadata.ProtocolVersion)
+	}
+	if !slices.Equal(metadata.ToolArguments, []string{"scip-go -o index.scip"}) {
+		t.Fatalf("tool arguments = %v, want preserved metadata arguments", metadata.ToolArguments)
 	}
 
 	documents := view.Documents()
@@ -49,8 +56,9 @@ func TestNewViewBuildsFromLoadedRuntimeIndexAndPreservesTraversalFacts(t *testin
 	}
 	definition := first.Occurrences[0]
 	if definition.DocumentPath != "cmd/main.go" ||
+		definition.DocumentLanguage != "go" ||
 		definition.PositionEncoding != scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart {
-		t.Fatalf("definition occurrence context = %+v, want containing document path and encoding", definition)
+		t.Fatalf("definition occurrence context = %+v, want containing document path, language, and encoding", definition)
 	}
 	if !slices.Equal(definition.Range, []int32{3, 4, 12}) {
 		t.Fatalf("same-line range = %v, want exact SCIP range", definition.Range)
@@ -124,6 +132,41 @@ func TestNewViewKeepsEmptyInventoriesAsData(t *testing.T) {
 	}
 	if len(view.Occurrences()) != 0 {
 		t.Fatalf("empty occurrence inventory = %v, want empty", view.Occurrences())
+	}
+}
+
+func TestNewViewUsesOnlyLoadedIndexData(t *testing.T) {
+	t.Parallel()
+
+	view := NewView(runtimecontract.LoadedIndex{
+		Path: "/path/that/traversal/must/not/open/index.scip",
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath:     "missing/source/file.go",
+					Language:         "go",
+					PositionEncoding: scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart,
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:       []int32{1, 2, 3},
+							Symbol:      "scip-go gomod example.com/project . missing/Symbol.",
+							SymbolRoles: int32(scip.SymbolRole_ReadAccess),
+						},
+					},
+				},
+			},
+		},
+	})
+
+	documents := view.Documents()
+	if len(documents) != 1 {
+		t.Fatalf("document count = %d, want traversal over loaded data without opening paths", len(documents))
+	}
+	if documents[0].RelativePath != "missing/source/file.go" {
+		t.Fatalf("document path = %q, want loaded SCIP relative path", documents[0].RelativePath)
+	}
+	if len(documents[0].Occurrences) != 1 {
+		t.Fatalf("occurrence count = %d, want loaded occurrence without reading source files", len(documents[0].Occurrences))
 	}
 }
 
