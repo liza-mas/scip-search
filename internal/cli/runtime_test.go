@@ -3,7 +3,10 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -223,6 +226,109 @@ func TestRunRejectsIndexWithoutValueForEveryDocumentedCommand(t *testing.T) {
 	}
 }
 
+func TestRunLoaderFailuresReturnStatusIndexLoadBeforeHandlers(t *testing.T) {
+	t.Parallel()
+
+	failures := []struct {
+		name         string
+		diagnostic   string
+		selectedPath func(t *testing.T) string
+		assertPath   func(t *testing.T, path string)
+	}{
+		{
+			name:       "nonexistent",
+			diagnostic: "selected index does not exist",
+			selectedPath: func(t *testing.T) string {
+				t.Helper()
+
+				return filepath.Join(t.TempDir(), "missing.scip")
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatalf("selected missing path stat error = %v, want not exist", err)
+				}
+			},
+		},
+		{
+			name:       "unreadable",
+			diagnostic: "selected index cannot be opened",
+			selectedPath: func(t *testing.T) string {
+				t.Helper()
+
+				return writeSelectedIndexBytes(t, []byte("unreadable sentinel"))
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				assertSelectedIndexBytes(t, path, []byte("unreadable sentinel"))
+			},
+		},
+		{
+			name:       "directory",
+			diagnostic: "selected index is a directory",
+			selectedPath: func(t *testing.T) string {
+				t.Helper()
+
+				return t.TempDir()
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatalf("selected directory stat error = %v", err)
+				}
+				if !info.IsDir() {
+					t.Fatalf("selected path %q is not a directory after Run()", path)
+				}
+			},
+		},
+		{
+			name:       "invalid_scip",
+			diagnostic: "selected index is not valid SCIP",
+			selectedPath: func(t *testing.T) string {
+				t.Helper()
+
+				return writeSelectedIndexBytes(t, []byte("not a SCIP protobuf"))
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				assertSelectedIndexBytes(t, path, []byte("not a SCIP protobuf"))
+			},
+		},
+	}
+
+	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+		for _, failure := range failures {
+			t.Run(command+"/"+failure.name, func(t *testing.T) {
+				t.Parallel()
+
+				selectedPath := failure.selectedPath(t)
+				loader := &recordingLoader{err: errors.New(failure.diagnostic)}
+				handlers := newRecordingHandlers()
+				cliRuntime := NewRuntime(loader, handlers)
+				var stdout bytes.Buffer
+				var stderr bytes.Buffer
+
+				status := cliRuntime.Run(
+					[]string{command, "--index", selectedPath, "--opaque-query-arg", "value"},
+					&stdout,
+					&stderr,
+				)
+
+				assertIndexLoadFailureBeforeHandlers(t, status, &stdout, &stderr, loader, handlers, selectedPath)
+				if !strings.Contains(stderr.String(), failure.diagnostic) {
+					t.Fatalf("stderr = %q, want loader diagnostic substring %q", stderr.String(), failure.diagnostic)
+				}
+				failure.assertPath(t, selectedPath)
+			})
+		}
+	}
+}
+
 func TestRunWithIndexLoadsAndExecutesOnlySelectedHandler(t *testing.T) {
 	t.Parallel()
 
@@ -295,11 +401,16 @@ type recordingLoader struct {
 	calls  int
 	paths  []string
 	loaded any
+	err    error
 }
 
 func (loader *recordingLoader) Load(indexPath string) (any, error) {
 	loader.calls++
 	loader.paths = append(loader.paths, indexPath)
+
+	if loader.err != nil {
+		return nil, loader.err
+	}
 
 	return loader.loaded, nil
 }
@@ -384,6 +495,32 @@ func assertUsageFailureBeforeLoaderAndHandlers(
 	assertNoHandlerCalls(t, handlers)
 }
 
+func assertIndexLoadFailureBeforeHandlers(
+	t *testing.T,
+	status runtimecontract.Status,
+	stdout *bytes.Buffer,
+	stderr *bytes.Buffer,
+	loader *recordingLoader,
+	handlers map[string]Handler,
+	selectedPath string,
+) {
+	t.Helper()
+
+	if status != runtimecontract.StatusIndexLoad {
+		t.Fatalf("Run() status = %d, want %d", status, runtimecontract.StatusIndexLoad)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if stderr.String() == "" {
+		t.Fatal("stderr is empty, want index-loading diagnostic")
+	}
+	if got, want := loader.paths, []string{selectedPath}; !slices.Equal(got, want) {
+		t.Fatalf("loader paths = %v, want only caller-selected path %q", got, selectedPath)
+	}
+	assertNoHandlerCalls(t, handlers)
+}
+
 func assertSingleJSONValue(t *testing.T, output []byte, want map[string]string) {
 	t.Helper()
 
@@ -408,5 +545,28 @@ func assertNotQueryJSON(t *testing.T, output string) {
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(output), &decoded); err == nil {
 		t.Fatalf("stdout = %q, want human-readable version output instead of query JSON", output)
+	}
+}
+
+func writeSelectedIndexBytes(t *testing.T, contents []byte) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "selected.scip")
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", path, err)
+	}
+
+	return path
+}
+
+func assertSelectedIndexBytes(t *testing.T, path string, want []byte) {
+	t.Helper()
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("selected index bytes after Run() = %v, want unchanged %v", got, want)
 	}
 }
