@@ -2,9 +2,19 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/scip-code/scip/bindings/go/scip"
+	"google.golang.org/protobuf/proto"
+
+	"scip-search/internal/cli"
 	runtimecontract "scip-search/internal/runtime"
 	"scip-search/internal/version"
 )
@@ -116,5 +126,337 @@ func TestRunVersionUsesBuildIdentityBeforeQueryValidation(t *testing.T) {
 				t.Fatalf("stdout = %q, want non-JSON version output", stdout.String())
 			}
 		})
+	}
+}
+
+func TestRunProductionIndexLoadingFailuresAcrossDocumentedCommands(t *testing.T) {
+	t.Parallel()
+
+	failures := []struct {
+		name       string
+		indexPath  func(t *testing.T) string
+		assertPath func(t *testing.T, path string)
+	}{
+		{
+			name: "nonexistent",
+			indexPath: func(t *testing.T) string {
+				t.Helper()
+
+				return filepath.Join(t.TempDir(), "missing.scip")
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatalf("os.Stat(%q) error = %v, want nonexistent selected index", path, err)
+				}
+			},
+		},
+		{
+			name: "directory",
+			indexPath: func(t *testing.T) string {
+				t.Helper()
+
+				return t.TempDir()
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatalf("os.Stat(%q) error = %v", path, err)
+				}
+				if !info.IsDir() {
+					t.Fatalf("selected index path %q is not a directory after run", path)
+				}
+			},
+		},
+		{
+			name: "invalid",
+			indexPath: func(t *testing.T) string {
+				t.Helper()
+
+				return writeSelectedIndexBytes(t, []byte("not a SCIP protobuf"))
+			},
+			assertPath: func(t *testing.T, path string) {
+				t.Helper()
+
+				assertSelectedIndexBytes(t, path, []byte("not a SCIP protobuf"))
+			},
+		},
+	}
+
+	for _, command := range documentedQueryCommands() {
+		for _, failure := range failures {
+			t.Run(command+"/"+failure.name, func(t *testing.T) {
+				t.Parallel()
+
+				indexPath := failure.indexPath(t)
+				var stdout bytes.Buffer
+				var stderr bytes.Buffer
+
+				status := run(documentedCommandArgs(command, indexPath), &stdout, &stderr)
+
+				assertIndexLoadFailure(t, status, &stdout, &stderr)
+				failure.assertPath(t, indexPath)
+			})
+		}
+	}
+}
+
+func TestRunDeterministicUnreadableOpenFailureAcrossDocumentedCommands(t *testing.T) {
+	t.Parallel()
+
+	for _, command := range documentedQueryCommands() {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+
+			indexPath := writeSelectedIndexBytes(t, []byte("kept unreadable by injected loader failure"))
+			loader := &openFailureLoader{}
+			handlers := newBoundaryHandlers()
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := runWithTestRuntime(documentedCommandArgs(command, indexPath), loader, handlers, &stdout, &stderr)
+
+			assertIndexLoadFailure(t, status, &stdout, &stderr)
+			if got, want := loader.paths, []string{indexPath}; !slices.Equal(got, want) {
+				t.Fatalf("loader paths = %v, want only selected index %q", got, indexPath)
+			}
+			assertNoBoundaryHandlerCalls(t, handlers)
+			assertSelectedIndexBytes(t, indexPath, []byte("kept unreadable by injected loader failure"))
+		})
+	}
+}
+
+func TestRunValidGeneratedSCIPLoadsReachQueryBoundaryAcrossDocumentedCommands(t *testing.T) {
+	t.Parallel()
+
+	for _, command := range documentedQueryCommands() {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+
+			indexPath := writeValidSelectedSCIPIndex(t, command)
+			handlers := newBoundaryHandlers()
+			selectedHandler := handlers[command].(*boundaryHandler)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := runWithProductionLoader(documentedCommandArgs(command, indexPath), handlers, &stdout, &stderr)
+
+			if status != runtimecontract.StatusOK {
+				t.Fatalf("runWithProductionLoader(%s) status = %d, want %d", command, status, runtimecontract.StatusOK)
+			}
+			if stderr.String() != "" {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+			if selectedHandler.calls != 1 {
+				t.Fatalf("%s handler calls = %d, want 1", command, selectedHandler.calls)
+			}
+			loaded, ok := selectedHandler.loaded.(runtimecontract.LoadedIndex)
+			if !ok {
+				t.Fatalf("%s handler loaded context = %T, want runtime LoadedIndex", command, selectedHandler.loaded)
+			}
+			if loaded.Path != indexPath {
+				t.Fatalf("%s loaded path = %q, want selected index %q", command, loaded.Path, indexPath)
+			}
+			if got := loaded.Index.GetMetadata().GetToolInfo().GetName(); got != command {
+				t.Fatalf("%s loaded SCIP tool name = %q, want %q", command, got, command)
+			}
+			if got, want := selectedHandler.args, documentedQueryArgs(command); !slices.Equal(got, want) {
+				t.Fatalf("%s handler args = %v, want %v", command, got, want)
+			}
+			assertOtherBoundaryHandlersNotCalled(t, handlers, command)
+			assertSingleJSONCommand(t, stdout.Bytes(), command)
+		})
+	}
+}
+
+type openFailureLoader struct {
+	paths []string
+}
+
+func (loader *openFailureLoader) Load(indexPath string) (any, error) {
+	loader.paths = append(loader.paths, indexPath)
+
+	return nil, errors.New("selected index cannot be opened: deterministic loader-open failure")
+}
+
+type boundaryHandler struct {
+	command string
+	calls   int
+	loaded  any
+	args    []string
+}
+
+func (handler *boundaryHandler) Handle(loadedIndex any, args []string) (any, error) {
+	handler.calls++
+	handler.loaded = loadedIndex
+	handler.args = slices.Clone(args)
+
+	loaded := loadedIndex.(runtimecontract.LoadedIndex)
+
+	return map[string]string{
+		"command": handler.command,
+		"tool":    loaded.Index.GetMetadata().GetToolInfo().GetName(),
+	}, nil
+}
+
+func newBoundaryHandlers() map[string]cli.Handler {
+	handlers := make(map[string]cli.Handler, len(documentedQueryCommands()))
+	for _, command := range documentedQueryCommands() {
+		handlers[command] = &boundaryHandler{command: command}
+	}
+
+	return handlers
+}
+
+func runWithTestRuntime(
+	args []string,
+	loader cli.Loader,
+	handlers map[string]cli.Handler,
+	stdout io.Writer,
+	stderr io.Writer,
+) runtimecontract.Status {
+	return cli.NewRuntime(loader, handlers).Run(args, stdout, stderr)
+}
+
+func runWithProductionLoader(
+	args []string,
+	handlers map[string]cli.Handler,
+	stdout io.Writer,
+	stderr io.Writer,
+) runtimecontract.Status {
+	return cli.NewProductionRuntime(handlers).Run(args, stdout, stderr)
+}
+
+func documentedQueryCommands() []string {
+	return []string{"symbols", "references", "implementations", "packages"}
+}
+
+func documentedCommandArgs(command string, indexPath string) []string {
+	args := []string{command, "--index", indexPath}
+
+	return append(args, documentedQueryArgs(command)...)
+}
+
+func documentedQueryArgs(command string) []string {
+	switch command {
+	case "symbols":
+		return []string{"--name", "Supervisor"}
+	case "references", "implementations":
+		return []string{"--symbol", "scip-go gomod example.com/repo . pkg/Foo#"}
+	case "packages":
+		return []string{"--prefix", "example.com"}
+	default:
+		return nil
+	}
+}
+
+func assertIndexLoadFailure(
+	t *testing.T,
+	status runtimecontract.Status,
+	stdout *bytes.Buffer,
+	stderr *bytes.Buffer,
+) {
+	t.Helper()
+
+	if status != runtimecontract.StatusIndexLoad {
+		t.Fatalf("status = %d, want %d", status, runtimecontract.StatusIndexLoad)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if stderr.String() == "" {
+		t.Fatal("stderr is empty, want index-loading diagnostic")
+	}
+}
+
+func assertNoBoundaryHandlerCalls(t *testing.T, handlers map[string]cli.Handler) {
+	t.Helper()
+
+	for command, handler := range handlers {
+		recorder := handler.(*boundaryHandler)
+		if recorder.calls != 0 {
+			t.Fatalf("%s handler calls = %d, want 0", command, recorder.calls)
+		}
+	}
+}
+
+func assertOtherBoundaryHandlersNotCalled(t *testing.T, handlers map[string]cli.Handler, selectedCommand string) {
+	t.Helper()
+
+	for command, handler := range handlers {
+		if command == selectedCommand {
+			continue
+		}
+
+		recorder := handler.(*boundaryHandler)
+		if recorder.calls != 0 {
+			t.Fatalf("%s handler calls = %d, want 0", command, recorder.calls)
+		}
+	}
+}
+
+func assertSingleJSONCommand(t *testing.T, output []byte, command string) {
+	t.Helper()
+
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	var got map[string]string
+	if err := decoder.Decode(&got); err != nil {
+		t.Fatalf("stdout JSON decode failed: %v; output = %q", err, output)
+	}
+	if got["command"] != command {
+		t.Fatalf("stdout JSON command = %q, want %q", got["command"], command)
+	}
+	if got["tool"] != command {
+		t.Fatalf("stdout JSON tool = %q, want %q", got["tool"], command)
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		t.Fatalf("stdout contains extra JSON or non-JSON content after first value: %v", err)
+	}
+}
+
+func writeSelectedIndexBytes(t *testing.T, contents []byte) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "selected.scip")
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", path, err)
+	}
+
+	return path
+}
+
+func writeValidSelectedSCIPIndex(t *testing.T, toolName string) string {
+	t.Helper()
+
+	indexBytes, err := proto.Marshal(&scip.Index{
+		Metadata: &scip.Metadata{
+			ToolInfo: &scip.ToolInfo{
+				Name:    toolName,
+				Version: "v1",
+			},
+			TextDocumentEncoding: scip.TextEncoding_UTF8,
+		},
+	})
+	if err != nil {
+		t.Fatalf("proto.Marshal(valid SCIP index) error = %v", err)
+	}
+
+	return writeSelectedIndexBytes(t, indexBytes)
+}
+
+func assertSelectedIndexBytes(t *testing.T, path string, want []byte) {
+	t.Helper()
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("selected index bytes after run = %v, want unchanged %v", got, want)
 	}
 }
