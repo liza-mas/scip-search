@@ -140,3 +140,43 @@ Run time coupling:
 
 ### Open Questions
 - None.
+
+---
+
+## Story ST-003 - Provide Relationship Edge Fixture Coverage
+
+### References
+- parent epic: specs/epics/readme/20260517-100328-epic-planning-2.md#capability-cap-004---provide-traversal-fixtures-for-scip-data-coverage - Requires fixtures to cover relationships and specifically calls for at least one implementation relationship.
+- dependency story document: specs/stories/readme/20260517-100328-epic-planning-2/CAP-003-02-relationship-lookup-view.md - Requires relationship owner lookup, target lookup, original direction, and SCIP edge-kind preservation.
+- dependency story document: specs/stories/readme/20260517-100328-epic-planning-2/CAP-001-02-document-and-symbol-inventory.md - Defines document-level and external symbol information that can own relationship facts.
+- official source: https://raw.githubusercontent.com/scip-code/scip/main/scip.proto - Defines `SymbolInformation.relationships` and relationship edge-kind flags.
+
+### User Story
+**As a** CLI Maintainer implementing relationship traversal, **I want to** include schema-valid SCIP relationship facts in the shared traversal fixture, **so that** relationship lookup stories can be validated against concrete owner, target, direction, and edge-kind data.
+
+### Acceptance Criteria
+- AC-003-1: Given maintainers inspect the shared traversal fixture, when relationship data is checked, then at least one document-level or external symbol information entry owns a SCIP relationship.
+- AC-003-2: Given a fixture relationship is inspected through traversal, when owner and target symbols are checked, then the relationship preserves the owning source symbol, the relationship target symbol, and the original source-to-target direction.
+- AC-003-3: Given the fixture relationship edge kinds are inspected, when implementation coverage is checked, then at least one relationship has the SCIP implementation relationship flag available for traversal validation.
+- AC-003-4: Given the fixture relationship edge kinds are inspected, when reference, definition, and type-definition coverage are checked, then the fixture includes relationship facts that make each of those SCIP edge-kind flags available for traversal validation.
+- AC-003-4b: Given a fixture relationship has multiple SCIP edge-kind flags set, when traversal exposes that relationship, then the fixture preserves the flags together instead of requiring separate single-kind relationships.
+- AC-003-5: Given maintainers use relationship fixture data, when traversal validation observes relationship facts, then the fixture does not define final reference expansion, implementation selection, related-symbol behavior, duplicate elimination, response ordering, or command JSON fields.
+
+### Depends on:
+Implementation ordering:
+- Story document CAP-003-02-relationship-lookup-view.md - Relationship fixture expectations must align with owner lookup, target lookup, and edge-kind preservation.
+- Story ST-001 - Provide Document and Symbol Fixture Coverage
+
+Run time coupling:
+- I-001-002 - Query planner traversal view
+
+### Out of Scope
+- Synthesizing inverse relationships that are absent from SCIP data.
+- Deciding which edge kinds a command follows for final query results.
+- Resolving relationship targets across multiple SCIP indexes.
+
+### Assumptions
+- **ASM-003-1**: Edge-kind coverage can be satisfied by either separate relationship facts or a multi-flag relationship fact when the official SCIP data exposes multiple flags together. - *Why*: CAP-003 requires preserving all present flags and does not require one physical relationship per edge kind. - Confidence: HIGH
+
+### Open Questions
+- None.

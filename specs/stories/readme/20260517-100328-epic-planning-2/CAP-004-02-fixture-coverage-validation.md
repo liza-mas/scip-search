@@ -75,7 +75,7 @@ Applies to: validation of the CAP-004 shared traversal fixture set.
 - AC-001-3: Given coverage validation inspects occurrence lookup, when it queries a full SCIP symbol known to exist in the fixture, then validation proves every matching occurrence remains associated with its containing document and exact full SCIP symbol.
 - AC-001-4: Given coverage validation inspects occurrence lookup for a full SCIP symbol absent from occurrences, when the lookup runs, then validation proves traversal exposes an empty lookup result without treating it as a command-level missing-symbol failure.
 - AC-001-5: Given coverage validation inspects relationship lookup, when owner and target symbol access patterns are checked, then validation proves relationship source symbols, target symbols, and original direction remain distinguishable.
-- AC-001-6: Given fixture relationships include schema-defined edge-kind flags, when coverage validation inspects relationship facts, then validation proves reference, implementation, definition, and type-definition flags remain available when present.
+- AC-001-6: Given fixture relationships include schema-defined edge-kind coverage, when coverage validation inspects relationship facts, then validation proves reference, implementation, definition, and type-definition flags are each available from the shared fixture.
 - AC-001-7: Given fixture coverage validation runs, when maintainers inspect its scope, then it does not assert final `references`, `implementations`, `symbols`, or `packages` result selection, grouping, duplicate elimination, ordering, or JSON fields.
 
 ### Depends on:
