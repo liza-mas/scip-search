@@ -180,9 +180,13 @@ func newReleaseHarness(t *testing.T) *releaseHarness {
 }
 
 func (h *releaseHarness) addArtifact(version, goos, goarch, publishedAt string) {
+	h.addArtifactWithVersionOutput(version, goos, goarch, publishedAt, "scip-search release "+version, 0)
+}
+
+func (h *releaseHarness) addArtifactWithVersionOutput(version, goos, goarch, publishedAt, versionOutput string, exitCode int) {
 	artifact := filepath.Join(h.artifactDir, fmt.Sprintf("scip-search-%s-%s-%s", version, goos, goarch))
-	content := []byte("release=" + version + "\n")
-	if err := os.WriteFile(artifact, content, 0o755); err != nil {
+	content := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n\tprintf '%%s\\n' %q\n\texit %d\nfi\nprintf 'unexpected arguments: %%s\\n' \"$*\" >&2\nexit 64\n", versionOutput, exitCode)
+	if err := os.WriteFile(artifact, []byte(content), 0o755); err != nil {
 		panic(err)
 	}
 	fmt.Fprintf(&h.metadata, "%s\t%s\t%s\t%s\t%s\n", version, publishedAt, goos, goarch, artifact)
@@ -194,13 +198,21 @@ func (h *releaseHarness) addArtifact(version, goos, goarch, publishedAt string) 
 func (h *releaseHarness) run(t *testing.T, env map[string]string) commandResult {
 	t.Helper()
 
+	return h.runWithInstallDir(t, h.installDir, env)
+}
+
+func (h *releaseHarness) runWithInstallDir(t *testing.T, installDir string, env map[string]string) commandResult {
+	t.Helper()
+
 	cmd := exec.Command("bash", installerPath)
 	cmd.Dir = filepath.Join("..", "..", "tests", "install")
-	cmd.Env = append(os.Environ(),
-		"INSTALL_DIR="+h.installDir,
+	cmd.Env = append(cleanInstallerEnv(),
 		"PATH="+h.binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"SCIP_SEARCH_RELEASES_FILE="+h.metadataPath,
 	)
+	if installDir != "" {
+		cmd.Env = append(cmd.Env, "INSTALL_DIR="+installDir)
+	}
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
@@ -217,24 +229,33 @@ func (h *releaseHarness) run(t *testing.T, env map[string]string) commandResult 
 	}
 }
 
+func cleanInstallerEnv() []string {
+	blocked := map[string]bool{
+		"BRANCH":                   true,
+		"HOME":                     true,
+		"INSTALL_DIR":              true,
+		"SCIP_SEARCH_INSTALL_ARCH": true,
+		"SCIP_SEARCH_INSTALL_OS":   true,
+		"SCIP_SEARCH_RELEASES_FILE": true,
+		"SCIP_SEARCH_RELEASES_URL": true,
+		"VERSION":                  true,
+	}
+	var env []string
+	for _, entry := range os.Environ() {
+		key, _, found := strings.Cut(entry, "=")
+		if found && blocked[key] {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return env
+}
+
 func (h *releaseHarness) requireInstalledRelease(t *testing.T, version string) {
 	t.Helper()
 
 	path := filepath.Join(h.installDir, "scip-search")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("expected installed scip-search at %s: %v", path, err)
-	}
-	if got := strings.TrimSpace(string(data)); got != "release="+version {
-		t.Fatalf("installed artifact = %q, want release=%s", got, version)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat installed scip-search: %v", err)
-	}
-	if info.Mode()&0o111 == 0 {
-		t.Fatalf("installed scip-search is not executable: mode %s", info.Mode())
-	}
+	requireInstalledReleaseAt(t, path, version)
 }
 
 func (h *releaseHarness) requireNotInstalled(t *testing.T) {
@@ -281,8 +302,17 @@ func (r commandResult) requireFailure(t *testing.T) {
 	if r.err == nil {
 		t.Fatalf("installer unexpectedly succeeded\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
+	r.requireNoSuccessOrVerificationClaim(t)
+}
+
+func (r commandResult) requireNoSuccessOrVerificationClaim(t *testing.T) {
+	t.Helper()
+
 	if strings.Contains(r.stdout, "Installed scip-search") {
 		t.Fatalf("failure output claimed success:\nstdout:\n%s", r.stdout)
+	}
+	if strings.Contains(r.stdout, "scip-search --version") || strings.Contains(r.stderr, "scip-search --version") {
+		t.Fatalf("failure output told caller to verify a missing binary\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
 }
 
@@ -291,5 +321,28 @@ func (r commandResult) requireDiagnostic(t *testing.T, want string) {
 
 	if !strings.Contains(r.stderr, want) {
 		t.Fatalf("diagnostic %q missing\nstdout:\n%s\nstderr:\n%s", want, r.stdout, r.stderr)
+	}
+}
+
+func requireInstalledReleaseAt(t *testing.T, path, version string) {
+	t.Helper()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("expected installed scip-search at %s: %v", path, err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatalf("installed scip-search is not executable: mode %s", info.Mode())
+	}
+
+	cmd := exec.Command(path, "--version")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("%s --version failed: %v\nstdout:\n%s\nstderr:\n%s", path, err, stdout.String(), stderr.String())
+	}
+	if got := stdout.String(); !strings.Contains(got, version) {
+		t.Fatalf("%s --version output %q does not identify release %s", path, got, version)
 	}
 }

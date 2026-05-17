@@ -144,6 +144,16 @@ install_artifact() {
 	esac
 
 	chmod 0755 "$dest" || fail "INSTALL_DIR is not usable: $INSTALL_DIR"
+	if ! version_output=$("$dest" --version 2>&1); then
+		fail "installed scip-search at $dest failed --version for $selected_version"
+	fi
+	case "$version_output" in
+	*"$selected_version"*)
+		;;
+	*)
+		fail "installed scip-search at $dest did not identify $selected_version"
+		;;
+	esac
 	printf 'Installed scip-search %s to %s\n' "$selected_version" "$dest"
 }
 
