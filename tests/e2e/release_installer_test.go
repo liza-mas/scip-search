@@ -322,8 +322,8 @@ func (r installerResult) requireFailure(t *testing.T) {
 	if r.err == nil {
 		t.Fatalf("installer unexpectedly succeeded\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
-	if strings.Contains(r.stdout, "Installed scip-search") {
-		t.Fatalf("failure output claimed success:\nstdout:\n%s", r.stdout)
+	if strings.Contains(r.stdout, "Installed scip-search") || strings.Contains(r.stderr, "Installed scip-search") {
+		t.Fatalf("failure output claimed success:\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
 	if strings.Contains(r.stdout, "scip-search --version") || strings.Contains(r.stderr, "scip-search --version") {
 		t.Fatalf("failure output instructed verification of a missing binary\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
