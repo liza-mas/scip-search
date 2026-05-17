@@ -1,0 +1,41 @@
+[
+  {
+    "desc": "`scip-search` users can pass an exact full SCIP symbol to `references --symbol` or `implementations --symbol` and receive a deterministic successful response for found and missing symbols without partial-name resolution.",
+    "done_when": "The symbol-based query stories specify literal exact-symbol matching for both references and implementations, preserve the queried full symbol in successful payloads, reject partial-name behavior from this scope, and define successful empty-result responses for exact symbols with no matches without redefining shared runtime failures.",
+    "scope": "Exact `--symbol` behavior, no partial or fuzzy matching, shared found and missing exact-symbol response semantics for references and implementations, and payload preservation of the queried symbol. Excludes symbol discovery, ambiguous partial-name resolution, shared runtime errors, reference occurrence selection, implementation traversal, and fixture coverage.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-001---resolve-exact-symbol-query-inputs"
+  },
+  {
+    "desc": "`scip-search` users can run `references --symbol <scip-symbol>` and receive deterministic reference occurrence results for the exact symbol and SCIP reference-related symbols, including document paths and ranges.",
+    "done_when": "The reference query stories specify selection of non-definition reference occurrences for the queried exact symbol and SCIP reference-related symbols, stable ordering, empty-result behavior, and a successful JSON payload whose reference entries include matched symbols, document paths, SCIP ranges, and role context without redefining shared runtime behavior.",
+    "scope": "`references --symbol` occurrence selection, SCIP reference relationship inclusion, exclusion of definition occurrences from reference results, reference result JSON fields, stable ordering, and empty successful results. Excludes implementation results, source-file reads, call hierarchy synthesis, semantic ranking, shared traversal construction, shared runtime errors, symbol discovery, and package discovery.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-002---return-reference-occurrences-for-exact-symbols",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` users can run `implementations --symbol <scip-symbol>` and receive deterministic implementation results derived from SCIP implementation relationships, including implementation symbols, definition locations, and ranges when available.",
+    "done_when": "The implementation query stories specify traversal of SCIP implementation relationships from the queried exact symbol, stable ordering, empty-result behavior, handling of implementation symbols with and without available definition locations, and a successful JSON payload whose implementation entries include implementation symbols, relationship basis, document paths, and SCIP ranges when present.",
+    "scope": "`implementations --symbol` relationship selection, implementation symbol result behavior, available definition location and range output, stable ordering, and empty successful results. Excludes synthesized relationships, reference results, type-definition traversal, full hierarchy graphs, package dependency graphs, semantic similarity, shared traversal construction, shared runtime errors, symbol discovery, and package discovery.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-003---return-implementation-relationship-results",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can validate reference and implementation query stories against deterministic SCIP fixtures and golden JSON cases that cover exact symbols, missing symbols, reference occurrences, implementation relationships, locations, ranges, and stable ordering.",
+    "done_when": "The fixture stories specify deterministic SCIP query fixtures and golden JSON cases that cover found and missing exact symbols, direct and reference-related reference occurrences, implementation relationships with available locations, implementation relationships without available locations where representable, stable ordering, source document paths, SCIP ranges, and empty successful results.",
+    "scope": "Query-specific fixtures and golden JSON validation for references and implementations, including exact symbols, missing symbols, reference occurrences, implementation relationships, locations, ranges, stable ordering, and empty results. Excludes shared runtime fixtures, shared traversal fixture construction, symbol and package discovery fixtures, large real-world fixtures, performance benchmarks, external indexer installation, and ctags fallback fixtures.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-004---validate-symbol-based-queries-with-fixtures",
+    "depends_on": [
+      "0",
+      "1",
+      "2"
+    ]
+  }
+]
