@@ -188,6 +188,96 @@ func TestNewViewExposesEverySymbolAndOccurrenceInventoryFact(t *testing.T) {
 	}
 }
 
+func TestNewViewPreservesOccurrenceLocationFactsWithoutSourceText(t *testing.T) {
+	t.Parallel()
+
+	sameLineSymbol := "scip-go gomod example.com/project . missing/SameLine()."
+	multiPositionSymbol := "scip-go gomod example.com/project . empty/MultiPosition()."
+	view := NewView(runtimecontract.LoadedIndex{
+		Path: filepath.Join(t.TempDir(), "index.scip"),
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath:     "missing/source.go",
+					Language:         "go",
+					PositionEncoding: scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart,
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:       []int32{11, 2, 9},
+							Symbol:      sameLineSymbol,
+							SymbolRoles: int32(scip.SymbolRole_ReadAccess),
+						},
+					},
+				},
+				{
+					RelativePath:     "empty/source.go",
+					Language:         "go",
+					Text:             "",
+					PositionEncoding: scip.PositionEncoding_UTF16CodeUnitOffsetFromLineStart,
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:          []int32{21, 1, 23, 4},
+							EnclosingRange: []int32{20, 0, 24, 0},
+							Symbol:         multiPositionSymbol,
+							SymbolRoles:    int32(scip.SymbolRole_Definition | scip.SymbolRole_WriteAccess),
+						},
+					},
+				},
+			},
+		},
+	})
+
+	documents := view.Documents()
+	if len(documents) != 2 {
+		t.Fatalf("document count = %d, want 2", len(documents))
+	}
+	if len(documents[0].Occurrences) != 1 {
+		t.Fatalf("missing-text occurrence count = %d, want 1", len(documents[0].Occurrences))
+	}
+	if len(documents[1].Occurrences) != 1 {
+		t.Fatalf("empty-text occurrence count = %d, want 1", len(documents[1].Occurrences))
+	}
+
+	missingTextOccurrence := documents[0].Occurrences[0]
+	if missingTextOccurrence.DocumentPath != "missing/source.go" {
+		t.Fatalf("missing-text occurrence document path = %q, want SCIP relative path", missingTextOccurrence.DocumentPath)
+	}
+	if missingTextOccurrence.PositionEncoding != scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart {
+		t.Fatalf("missing-text occurrence position encoding = %v, want SCIP document encoding", missingTextOccurrence.PositionEncoding)
+	}
+	if !slices.Equal(missingTextOccurrence.Range, []int32{11, 2, 9}) {
+		t.Fatalf("missing-text occurrence range = %v, want exact 3-integer SCIP range", missingTextOccurrence.Range)
+	}
+	if missingTextOccurrence.HasEnclosingRange || missingTextOccurrence.EnclosingRange != nil {
+		t.Fatalf("missing-text enclosing range = present:%v value:%v, want absent", missingTextOccurrence.HasEnclosingRange, missingTextOccurrence.EnclosingRange)
+	}
+	if missingTextOccurrence.SymbolRoles != int32(scip.SymbolRole_ReadAccess) {
+		t.Fatalf("missing-text occurrence roles = %d, want raw read-access bitset", missingTextOccurrence.SymbolRoles)
+	}
+
+	emptyTextOccurrence := documents[1].Occurrences[0]
+	if emptyTextOccurrence.DocumentPath != "empty/source.go" {
+		t.Fatalf("empty-text occurrence document path = %q, want SCIP relative path", emptyTextOccurrence.DocumentPath)
+	}
+	if emptyTextOccurrence.PositionEncoding != scip.PositionEncoding_UTF16CodeUnitOffsetFromLineStart {
+		t.Fatalf("empty-text occurrence position encoding = %v, want SCIP document encoding", emptyTextOccurrence.PositionEncoding)
+	}
+	if !slices.Equal(emptyTextOccurrence.Range, []int32{21, 1, 23, 4}) {
+		t.Fatalf("empty-text occurrence range = %v, want exact 4-integer SCIP range", emptyTextOccurrence.Range)
+	}
+	if !emptyTextOccurrence.HasEnclosingRange || !slices.Equal(emptyTextOccurrence.EnclosingRange, []int32{20, 0, 24, 0}) {
+		t.Fatalf("empty-text enclosing range = present:%v value:%v, want exact SCIP enclosing range", emptyTextOccurrence.HasEnclosingRange, emptyTextOccurrence.EnclosingRange)
+	}
+	wantRoles := int32(scip.SymbolRole_Definition | scip.SymbolRole_WriteAccess)
+	if emptyTextOccurrence.SymbolRoles != wantRoles {
+		t.Fatalf("empty-text occurrence roles = %d, want raw bitset %d", emptyTextOccurrence.SymbolRoles, wantRoles)
+	}
+
+	if got := collectOccurrenceSymbols(view.Occurrences()); !slices.Equal(got, []string{sameLineSymbol, multiPositionSymbol}) {
+		t.Fatalf("view occurrence symbols = %v, want SCIP occurrence symbols without filtering", got)
+	}
+}
+
 func TestNewViewKeepsEmptyInventoriesAsData(t *testing.T) {
 	t.Parallel()
 
