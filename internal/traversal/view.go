@@ -10,11 +10,12 @@ import (
 )
 
 type View struct {
-	metadata             Metadata
-	documents            []Document
-	externalSymbols      []Symbol
-	occurrences          []Occurrence
-	relationshipsByOwner map[string][]Relationship
+	metadata              Metadata
+	documents             []Document
+	externalSymbols       []Symbol
+	occurrences           []Occurrence
+	relationshipsByOwner  map[string][]Relationship
+	relationshipsByTarget map[string][]Relationship
 }
 
 func NewView(loaded runtimecontract.LoadedIndex) View {
@@ -26,27 +27,29 @@ func NewView(loaded runtimecontract.LoadedIndex) View {
 	documents := make([]Document, 0, len(index.GetDocuments()))
 	var occurrences []Occurrence
 	relationshipsByOwner := map[string][]Relationship{}
+	relationshipsByTarget := map[string][]Relationship{}
 	for _, document := range index.GetDocuments() {
 		documentFact := buildDocument(document)
 		occurrences = append(occurrences, documentFact.Occurrences...)
 		documents = append(documents, documentFact)
 		for _, symbol := range document.GetSymbols() {
-			appendRelationships(relationshipsByOwner, symbol)
+			appendRelationships(relationshipsByOwner, relationshipsByTarget, symbol)
 		}
 	}
 
 	externalSymbols := make([]Symbol, 0, len(index.GetExternalSymbols()))
 	for _, symbol := range index.GetExternalSymbols() {
 		externalSymbols = append(externalSymbols, buildSymbol(symbol, SymbolSourceExternal, ""))
-		appendRelationships(relationshipsByOwner, symbol)
+		appendRelationships(relationshipsByOwner, relationshipsByTarget, symbol)
 	}
 
 	return View{
-		metadata:             buildMetadata(index.GetMetadata()),
-		documents:            documents,
-		externalSymbols:      externalSymbols,
-		occurrences:          occurrences,
-		relationshipsByOwner: relationshipsByOwner,
+		metadata:              buildMetadata(index.GetMetadata()),
+		documents:             documents,
+		externalSymbols:       externalSymbols,
+		occurrences:           occurrences,
+		relationshipsByOwner:  relationshipsByOwner,
+		relationshipsByTarget: relationshipsByTarget,
 	}
 }
 
@@ -75,6 +78,10 @@ func (view View) Occurrences() []Occurrence {
 
 func (view View) RelationshipsOwnedBy(sourceSymbol string) []Relationship {
 	return cloneRelationships(view.relationshipsByOwner[sourceSymbol])
+}
+
+func (view View) RelationshipsTargeting(targetSymbol string) []Relationship {
+	return cloneRelationships(view.relationshipsByTarget[targetSymbol])
 }
 
 func buildMetadata(metadata *scip.Metadata) Metadata {
@@ -139,17 +146,23 @@ func buildOccurrence(occurrence *scip.Occurrence, document Document) Occurrence 
 	}
 }
 
-func appendRelationships(relationshipsByOwner map[string][]Relationship, symbol *scip.SymbolInformation) {
+func appendRelationships(
+	relationshipsByOwner map[string][]Relationship,
+	relationshipsByTarget map[string][]Relationship,
+	symbol *scip.SymbolInformation,
+) {
 	ownerSymbol := symbol.GetSymbol()
 	for _, relationship := range symbol.GetRelationships() {
-		relationshipsByOwner[ownerSymbol] = append(relationshipsByOwner[ownerSymbol], Relationship{
+		fact := Relationship{
 			SourceSymbol:     ownerSymbol,
 			TargetSymbol:     relationship.GetSymbol(),
 			IsReference:      relationship.GetIsReference(),
 			IsImplementation: relationship.GetIsImplementation(),
 			IsTypeDefinition: relationship.GetIsTypeDefinition(),
 			IsDefinition:     relationship.GetIsDefinition(),
-		})
+		}
+		relationshipsByOwner[ownerSymbol] = append(relationshipsByOwner[ownerSymbol], fact)
+		relationshipsByTarget[fact.TargetSymbol] = append(relationshipsByTarget[fact.TargetSymbol], fact)
 	}
 }
 

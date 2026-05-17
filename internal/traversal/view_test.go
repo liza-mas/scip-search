@@ -596,6 +596,83 @@ func TestNewViewExposesRelationshipsOwnedByExactSymbol(t *testing.T) {
 	}
 }
 
+func TestNewViewExposesRelationshipsTargetingExactSymbol(t *testing.T) {
+	t.Parallel()
+
+	localOwner := "scip-go gomod example.com/project . cmd/LocalOwner#"
+	externalOwner := "scip-go gomod example.com/dependency v1.2.3 dep/ExternalOwner#"
+	otherOwner := "scip-go gomod example.com/project . cmd/OtherOwner#"
+	target := "scip-go gomod example.com/project . cmd/SharedTarget#"
+	otherTarget := "scip-go gomod example.com/project . cmd/OtherTarget#"
+	missingTarget := "scip-go gomod example.com/project . cmd/MissingTarget#"
+
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath: "cmd/owners.go",
+					Symbols: []*scip.SymbolInformation{
+						{
+							Symbol: localOwner,
+							Relationships: []*scip.Relationship{
+								{Symbol: target, IsReference: true},
+								{Symbol: otherTarget, IsDefinition: true},
+							},
+						},
+						{
+							Symbol: otherOwner,
+							Relationships: []*scip.Relationship{
+								{Symbol: otherTarget, IsImplementation: true},
+							},
+						},
+					},
+				},
+			},
+			ExternalSymbols: []*scip.SymbolInformation{
+				{
+					Symbol: externalOwner,
+					Relationships: []*scip.Relationship{
+						{
+							Symbol:           target,
+							IsReference:      true,
+							IsImplementation: true,
+							IsTypeDefinition: true,
+							IsDefinition:     true,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	targetRelationships := view.RelationshipsTargeting(target)
+	if len(targetRelationships) != 2 {
+		t.Fatalf("target relationship count = %d, want 2", len(targetRelationships))
+	}
+	assertRelationshipFact(t, targetRelationships, Relationship{
+		SourceSymbol: localOwner,
+		TargetSymbol: target,
+		IsReference:  true,
+	})
+	assertRelationshipFact(t, targetRelationships, Relationship{
+		SourceSymbol:     externalOwner,
+		TargetSymbol:     target,
+		IsReference:      true,
+		IsImplementation: true,
+		IsTypeDefinition: true,
+		IsDefinition:     true,
+	})
+	assertNoRelationshipTarget(t, targetRelationships, otherTarget)
+	assertNoRelationshipSource(t, targetRelationships, target)
+
+	if got := view.RelationshipsTargeting(missingTarget); len(got) != 0 {
+		t.Fatalf("absent target relationships = %+v, want empty result", got)
+	}
+	if got := view.RelationshipsOwnedBy(target); len(got) != 0 {
+		t.Fatalf("target used as owner relationships = %+v, want no synthesized reverse owner relationships", got)
+	}
+}
+
 func TestRelationshipOwnerLookupReturnsCopies(t *testing.T) {
 	t.Parallel()
 
@@ -626,6 +703,43 @@ func TestRelationshipOwnerLookupReturnsCopies(t *testing.T) {
 	relationships[0].IsReference = false
 
 	again := view.RelationshipsOwnedBy(owner)
+	assertRelationshipFact(t, again, Relationship{
+		SourceSymbol: owner,
+		TargetSymbol: target,
+		IsReference:  true,
+	})
+}
+
+func TestRelationshipTargetLookupReturnsCopies(t *testing.T) {
+	t.Parallel()
+
+	owner := "scip-go gomod example.com/project . cmd/Owner#"
+	target := "scip-go gomod example.com/project . cmd/Target#"
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					Symbols: []*scip.SymbolInformation{
+						{
+							Symbol: owner,
+							Relationships: []*scip.Relationship{
+								{Symbol: target, IsReference: true},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	relationships := view.RelationshipsTargeting(target)
+	if len(relationships) != 1 {
+		t.Fatalf("relationship count = %d, want 1", len(relationships))
+	}
+	relationships[0].SourceSymbol = "mutated"
+	relationships[0].IsReference = false
+
+	again := view.RelationshipsTargeting(target)
 	assertRelationshipFact(t, again, Relationship{
 		SourceSymbol: owner,
 		TargetSymbol: target,
@@ -732,6 +846,16 @@ func assertNoRelationshipTarget(t *testing.T, relationships []Relationship, targ
 	for _, relationship := range relationships {
 		if relationship.TargetSymbol == target {
 			t.Fatalf("relationships = %+v, want no relationship targeting %q", relationships, target)
+		}
+	}
+}
+
+func assertNoRelationshipSource(t *testing.T, relationships []Relationship, source string) {
+	t.Helper()
+
+	for _, relationship := range relationships {
+		if relationship.SourceSymbol == source {
+			t.Fatalf("relationships = %+v, want no relationship sourced by %q", relationships, source)
 		}
 	}
 }
