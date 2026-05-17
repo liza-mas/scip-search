@@ -1,0 +1,53 @@
+[
+  {
+    "desc": "`scip-search` has shared runtime status constants, stderr-only diagnostic helpers, and a JSON success writer that encode one marshalable handler result without defining query result fields.",
+    "done_when": "Unit tests in `internal/runtime` pass asserting `StatusOK` is `0`, `StatusUsage` is `2`, and `StatusIndexLoad` is `3`; usage and index-loading diagnostics write only to a provided stderr writer while leaving stdout untouched; the success writer emits exactly one parseable JSON value plus a trailing newline to stdout, leaves stderr empty, returns status `0`, and exposes no command-specific result struct fields.",
+    "scope": "In scope: `internal/runtime` status constants, shared failure classification/types, diagnostic writer behavior, JSON success writer behavior, and colocated unit tests with anonymous map/struct results. Out of scope: command routing, flag parsing, process exits, filesystem index validation, official SCIP parsing, query traversal, command-specific result schemas, installer/version behavior, logging configuration, and docs.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/stdout-json-success-contract.md",
+    "plan_ref": "specs/plans/readme/20260517-191414-epic-planning-1-architecture-code-planning-0.md",
+    "task_depends_on": [
+      "repo-go-module-baseline-coding-0"
+    ]
+  },
+  {
+    "desc": "`scip-search` has one shared CLI router that recognizes `symbols`, `references`, `implementations`, and `packages` and rejects missing or unsupported command names as usage failures before loader or handler execution.",
+    "done_when": "Unit tests in `internal/cli` pass asserting `symbols`, `references`, `implementations`, and `packages` all route through the same command registry path; root invocation with no command and unsupported commands with plausible flags return status `2`, write a diagnostic only to stderr, leave stdout empty, and do not call the injected loader or any query handler.",
+    "scope": "In scope: `internal/cli` command registry/router, missing-command and unsupported-command usage failure handling, injected loader/handler test doubles, and tests proving no loader or handler calls occur before a selected supported command exists. Out of scope: shared `--index` parsing after command selection, filesystem index validation, official SCIP parsing, query-specific flags, query traversal, result schemas, process-level `os.Exit`, version/install behavior, and docs.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/cli-command-routing-and-usage.md",
+    "plan_ref": "specs/plans/readme/20260517-191414-epic-planning-1-architecture-code-planning-0.md",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` has shared `--index` parsing and one-shot runtime orchestration that passes the selected index path and opaque query arguments to exactly one injected loader and the selected query handler.",
+    "done_when": "Unit tests in `internal/cli` pass for every documented command asserting missing `--index` and `--index` without a value return status `2` through stderr only; a valid invocation with `--index <path>` calls the injected loader exactly once with `<path>`, calls only the selected handler exactly once with the loaded context and remaining opaque arguments, rejects an obvious second documented command token as a usage failure, emits the handler result as one parseable JSON value on stdout with empty stderr and status `0`, and introduces no SCIP traversal, filesystem path validation, or command-specific result fields.",
+    "scope": "In scope: `internal/cli` shared flag parser, invocation-local selected index path, one-shot loader-to-handler orchestration, opaque query-argument forwarding, additional documented-command token guard where it can be identified by shared parsing, success JSON emission through `internal/runtime`, and unit tests with fakes. Out of scope: query-specific validation for `--name`, `--symbol`, or `--prefix`, filesystem index validation beyond invoking the loader boundary, official SCIP parsing, traversal, command-specific schemas, default index locations, caching, daemon/watch/MCP/UI behavior, version/install behavior, and docs.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/cli-shared-index-flag.md",
+    "plan_ref": "specs/plans/readme/20260517-191414-epic-planning-1-architecture-code-planning-0.md",
+    "depends_on": [
+      "0",
+      "1"
+    ]
+  },
+  {
+    "desc": "`scip-search` command entrypoint delegates process IO and exit status to the shared runtime path and has black-box coverage for user-observable shared invocation behavior.",
+    "done_when": "Tests for `cmd/scip-search` pass by executing or invoking the command entrypoint with real stdout/stderr buffers and asserting no-command, unsupported-command, and each documented command missing `--index` exit with status `2`, stdout empty, and stderr non-empty; the entrypoint delegates to `internal/cli` instead of printing or encoding independently; no background loop, prompt, daemon, watcher, index generation, compilation, type-checking, or query traversal code is introduced; `go test ./...` passes.",
+    "scope": "In scope: `cmd/scip-search` entrypoint wiring, testable main/run adapter if needed, process stream/status tests for shared invocation failures, and `go test ./...` validation. Out of scope: successful production query execution before the real index loader exists, filesystem index validation, official SCIP parsing, query-specific flags, query traversal, result schemas, install/version behavior, and README changes.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "plan_ref": "specs/plans/readme/20260517-191414-epic-planning-1-architecture-code-planning-0.md",
+    "depends_on": [
+      "2"
+    ]
+  },
+  {
+    "desc": "`scip-search` README documents the shared query runtime failure and stream contract without adding query traversal or result schema details.",
+    "done_when": "README changes document the shared `--index` requirement, success stdout as one JSON value with empty stderr and status `0`, shared usage failures for missing/unsupported command or missing `--index` as stderr-only status `2`, and note that index-loading failures are owned by the subsequent loader boundary; no query-specific result fields, install/version changes, or traversal behavior are documented; markdown/pre-commit checks pass for the touched docs.",
+    "scope": "In scope: README user-facing command runtime notes for shared invocation, streams, and statuses introduced by this runtime shell. Out of scope: query-specific result schemas, symbol/package/reference/implementation traversal semantics, official SCIP loader implementation details, install/version docs, release packaging, ctags fallback docs, and code changes.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "plan_ref": "specs/plans/readme/20260517-191414-epic-planning-1-architecture-code-planning-0.md",
+    "depends_on": [
+      "3"
+    ]
+  }
+]
