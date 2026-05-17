@@ -114,6 +114,139 @@ func TestNewViewBuildsFromLoadedRuntimeIndexAndPreservesTraversalFacts(t *testin
 	assertSymbolFact(t, externalSymbols[0], SymbolSourceExternal, "")
 }
 
+func TestNewViewPreservesHoverMetadataWithoutMergingDocumentation(t *testing.T) {
+	t.Parallel()
+
+	localSymbol := "scip-go gomod example.com/project . cmd/Documented()."
+	externalSymbol := "scip-go gomod example.com/dependency v1.2.3 dep/External#"
+	undocumentedSymbol := "scip-go gomod example.com/project . cmd/Undocumented()."
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath: "cmd/main.go",
+					Language:     "go",
+					Symbols: []*scip.SymbolInformation{
+						{
+							Symbol:          localSymbol,
+							Kind:            scip.SymbolInformation_Method,
+							DisplayName:     "Documented",
+							Documentation:   []string{"**symbol** docs", "more symbol docs"},
+							EnclosingSymbol: "scip-go gomod example.com/project . cmd/",
+							SignatureDocumentation: &scip.Document{
+								Language: "go",
+								Text:     "func Documented() string",
+							},
+						},
+						{
+							Symbol:      undocumentedSymbol,
+							Kind:        scip.SymbolInformation_Function,
+							DisplayName: "Undocumented",
+						},
+					},
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:                 []int32{4, 2, 12},
+							Symbol:                localSymbol,
+							OverrideDocumentation: []string{"range-specific docs"},
+						},
+						{
+							Range:  []int32{9, 3, 15},
+							Symbol: localSymbol,
+						},
+					},
+				},
+			},
+			ExternalSymbols: []*scip.SymbolInformation{
+				{
+					Symbol:          externalSymbol,
+					Kind:            scip.SymbolInformation_Interface,
+					DisplayName:     "External",
+					Documentation:   []string{"external docs"},
+					EnclosingSymbol: "scip-go gomod example.com/dependency v1.2.3 dep/",
+					SignatureDocumentation: &scip.Document{
+						Language: "go",
+						Text:     "type External interface{}",
+					},
+				},
+			},
+		},
+	})
+
+	documents := view.Documents()
+	if len(documents) != 1 {
+		t.Fatalf("document count = %d, want 1", len(documents))
+	}
+	documentSymbols := documents[0].Symbols
+	if len(documentSymbols) != 2 {
+		t.Fatalf("document symbol count = %d, want documented and undocumented symbols", len(documentSymbols))
+	}
+	documented := documentSymbols[0]
+	if documented.Symbol != localSymbol ||
+		documented.Source != SymbolSourceDocument ||
+		documented.DocumentPath != "cmd/main.go" ||
+		documented.Kind != scip.SymbolInformation_Method ||
+		documented.DisplayName != "Documented" {
+		t.Fatalf("document symbol metadata = %+v, want full SCIP symbol, source, kind, display name, and path", documented)
+	}
+	if !slices.Equal(documented.Documentation, []string{"**symbol** docs", "more symbol docs"}) {
+		t.Fatalf("document symbol docs = %v, want exact SCIP documentation entries", documented.Documentation)
+	}
+	if documented.SignatureDocumentation == nil ||
+		documented.SignatureDocumentation.GetLanguage() != "go" ||
+		documented.SignatureDocumentation.GetText() != "func Documented() string" {
+		t.Fatalf("document signature documentation = %+v, want structured SCIP document", documented.SignatureDocumentation)
+	}
+	if documented.EnclosingSymbol != "scip-go gomod example.com/project . cmd/" {
+		t.Fatalf("document enclosing symbol = %q, want exact SCIP enclosing symbol", documented.EnclosingSymbol)
+	}
+
+	undocumented := documentSymbols[1]
+	if len(undocumented.Documentation) != 0 ||
+		undocumented.SignatureDocumentation != nil ||
+		undocumented.EnclosingSymbol != "" {
+		t.Fatalf("undocumented symbol hover metadata = %+v, want absent docs preserved as absent", undocumented)
+	}
+
+	externalSymbols := view.ExternalSymbols()
+	if len(externalSymbols) != 1 {
+		t.Fatalf("external symbol count = %d, want 1", len(externalSymbols))
+	}
+	external := externalSymbols[0]
+	if external.Symbol != externalSymbol ||
+		external.Source != SymbolSourceExternal ||
+		external.DocumentPath != "" ||
+		external.Kind != scip.SymbolInformation_Interface ||
+		external.DisplayName != "External" {
+		t.Fatalf("external symbol metadata = %+v, want full SCIP symbol, source, kind, display name, and no document path", external)
+	}
+	if !slices.Equal(external.Documentation, []string{"external docs"}) {
+		t.Fatalf("external docs = %v, want exact SCIP documentation entries", external.Documentation)
+	}
+	if external.SignatureDocumentation == nil ||
+		external.SignatureDocumentation.GetLanguage() != "go" ||
+		external.SignatureDocumentation.GetText() != "type External interface{}" {
+		t.Fatalf("external signature documentation = %+v, want structured SCIP document", external.SignatureDocumentation)
+	}
+	if external.EnclosingSymbol != "scip-go gomod example.com/dependency v1.2.3 dep/" {
+		t.Fatalf("external enclosing symbol = %q, want exact SCIP enclosing symbol", external.EnclosingSymbol)
+	}
+
+	occurrences := documents[0].Occurrences
+	if len(occurrences) != 2 {
+		t.Fatalf("occurrence count = %d, want present and absent override documentation cases", len(occurrences))
+	}
+	if !slices.Equal(occurrences[0].OverrideDocumentation, []string{"range-specific docs"}) {
+		t.Fatalf("override docs = %v, want occurrence-level documentation preserved", occurrences[0].OverrideDocumentation)
+	}
+	if len(occurrences[1].OverrideDocumentation) != 0 {
+		t.Fatalf("absent override docs = %v, want no symbol docs copied onto occurrence", occurrences[1].OverrideDocumentation)
+	}
+	if !slices.Equal(documented.Documentation, []string{"**symbol** docs", "more symbol docs"}) {
+		t.Fatalf("symbol docs after occurrence inspection = %v, want symbol-level docs distinguishable", documented.Documentation)
+	}
+}
+
 func TestNewViewExposesEverySymbolAndOccurrenceInventoryFact(t *testing.T) {
 	t.Parallel()
 
