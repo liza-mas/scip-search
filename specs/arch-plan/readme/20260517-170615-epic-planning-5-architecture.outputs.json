@@ -1,0 +1,42 @@
+[
+  {
+    "desc": "`scip-search` users and automation can run a top-level `scip-search --version` command that reports offline build identity for release and source builds without requiring an index or query runtime.",
+    "done_when": "`scip-search --version` is accepted without a query command or `--index`, exits `0`, writes non-empty `scip-search` build identity to stdout with empty stderr, distinguishes release identity from source provenance, and does not load SCIP data or perform network lookup.",
+    "scope": "CLI version invocation behavior, build identity contract between release/source build tooling and the binary, release/source provenance output, and tests for no-index version verification. Excludes query JSON schemas, query runtime error taxonomy, remote release lookup, installer workflow selection, README documentation, and packaging validation.",
+    "spec_ref": "README.md#installation",
+    "arch_ref": "specs/arch-plan/readme/20260517-170615-epic-planning-5-architecture.md"
+  },
+  {
+    "desc": "`scip-search` users can install latest or explicit released binaries on macOS/Linux into default or requested directories through `install.sh` and receive observable success or actionable release-install failure.",
+    "done_when": "The installer supports latest-release, `VERSION=<release>`, and `INSTALL_DIR=<directory>` release workflows on macOS/Linux; successful installs produce an executable `scip-search` at an observable path whose `--version` identifies the release; unsupported platform, unavailable release/version, and unusable install directory failures exit nonzero without claiming success.",
+    "scope": "`install.sh` release workflow selection, release artifact installation boundary, default and custom install directory behavior, executable availability, release install diagnostics, and release-install tests using `--version` for verification. Excludes `BRANCH`, local clone `make install`, source provenance, release hosting setup, signing, package managers, language indexer installation, SCIP index generation, and query command execution.",
+    "spec_ref": "README.md#installation",
+    "arch_ref": "specs/arch-plan/readme/20260517-170615-epic-planning-5-architecture.md",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` contributors and early adopters can build and install from a requested branch or local clone using caller-provided Go and make, with installed source-built binaries verifiable outside the source checkout.",
+    "done_when": "`BRANCH=<branch>` installer workflow and local clone `make install` build from source with caller-provided Go and make, install an executable `scip-search`, expose source-build provenance through `--version`, fail nonzero for missing Go, missing make, unavailable branch, build failure, or install failure, and never provision host tools or silently use release artifacts for source workflows.",
+    "scope": "`install.sh` branch workflow, source prerequisite checks, local clone `make install`, source build/install output, source-build version provenance handoff, and source-install tests. Excludes release binary download behavior, release artifact fallback, cross-compilation, CI publication, package manager formulas, Go/make installation, language indexer installation, SCIP indexes, and query command validation.",
+    "spec_ref": "README.md#installation",
+    "arch_ref": "specs/arch-plan/readme/20260517-170615-epic-planning-5-architecture.md",
+    "depends_on": [
+      "0",
+      "1"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can keep README installation guidance, release-facing validation commands, packaging tests, and drift checks aligned with supported release install, source install, custom directory, and `--version` workflows.",
+    "done_when": "README installation guidance documents latest release, explicit `VERSION`, `BRANCH`, custom `INSTALL_DIR`, local clone `make install`, source prerequisites, separate language-indexer prerequisites, and `--version` verification; release validation commands and packaging tests cover release install, source install, custom install directory, actionable failure signals, docs drift, and version verification without query-specific or traversal-specific validation.",
+    "scope": "README installation documentation, maintainer release validation command documentation, packaging tests for distribution workflows, README-vs-behavior drift checks, and distribution-scoped failure reporting. Excludes changing installer/source/version behavior, query-specific fixtures, traversal fixtures, real indexer execution, unsupported packaging channels, release approval policy, changelog policy, hosted release setup, signing, and notarization.",
+    "spec_ref": "README.md#installation",
+    "arch_ref": "specs/arch-plan/readme/20260517-170615-epic-planning-5-architecture.md",
+    "depends_on": [
+      "0",
+      "1",
+      "2"
+    ]
+  }
+]
