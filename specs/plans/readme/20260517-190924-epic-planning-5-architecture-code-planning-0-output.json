@@ -1,0 +1,22 @@
+[
+  {
+    "desc": "`scip-search` users can run top-level `scip-search --version` and receive offline build identity output that identifies `scip-search`, distinguishes release builds from source builds, and bypasses query command and index validation.",
+    "done_when": "Unit tests for the CLI/version boundary pass with release and source build metadata cases, asserting `scip-search --version` without a query command or `--index` exits `0`, writes non-empty stdout containing `scip-search` and the supplied release identity or source provenance, writes empty stderr, identifies release builds differently from source builds, does not emit query JSON, and does not call any SCIP index loader, query handler, or network lookup boundary.",
+    "scope": "In scope: extending the shared CLI runtime pre-routing path from `epic-planning-1-architecture-code-planning-0` with top-level `--version` flag handling before query validation, an internal build identity value/formatter, implementation-local build metadata variables or equivalent offline metadata boundary, release-vs-source provenance rendering, and colocated unit tests for stream/status behavior and no-loader/no-network guarantees. Out of scope: creating a competing `cmd/scip-search` entrypoint or separate runtime shell, query command routing beyond preserving `--version` precedence, query result schemas, shared runtime error taxonomy, SCIP index parsing/loading, traversal, installer workflow selection, source install workflow selection, README documentation, packaging validation, release hosting, signing, package managers, and language indexer installation.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-190924-epic-planning-5-architecture-code-planning-0.md",
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-0"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can validate the built executable's `--version` behavior end to end without a SCIP index, query command, network access, or installer workflow.",
+    "done_when": "End-to-end tests build or invoke controlled release-identity and source-provenance `scip-search` executables, run each as `scip-search --version` from a temporary directory with no selected SCIP index, and pass while asserting exit status `0`, empty stderr, non-empty stdout containing `scip-search`, release output that includes the controlled release identity, source output that includes controlled source provenance and does not masquerade as a release, and no query command, SCIP index fixture, language indexer, installer script, or remote lookup is required.",
+    "scope": "In scope: distribution-scoped executable smoke tests for `--version`, controlled release/source build metadata inputs, no-index working directory setup, stdout/stderr/status assertions, and test isolation from query fixtures and installer workflows. Out of scope: implementing version formatting or CLI routing, query command behavior, SCIP fixture generation, traversal validation, installer release/source workflow tests, README documentation, packaging validation scripts, hosted release lookup, and language indexer execution.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-190924-epic-planning-5-architecture-code-planning-0.md",
+    "depends_on": [
+      "0"
+    ]
+  }
+]
