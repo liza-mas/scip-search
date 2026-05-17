@@ -1,0 +1,30 @@
+[
+  {
+    "desc": "`scip-search` users can invoke documented query commands with shared flags and get deterministic one-shot process behavior before any query-specific traversal runs.",
+    "done_when": "Every documented scip-search query command can be invoked with the required shared index flag, invalid or incomplete invocations fail through the documented runtime path, and valid invocations run as one-shot processes without defining query traversal behavior.",
+    "scope": "Command routing, shared --index flag behavior, usage failures, and one-shot process lifecycle. Excludes query-specific flags, version/install behavior, SCIP traversal, result filtering, and result schemas.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-095535-epic-planning-1.md#capability-cap-001---invoke-scip-search-commands-consistently"
+  },
+  {
+    "desc": "`scip-search` users can point a command at an explicit SCIP index file and receive either a loaded query context or a clear loading failure before query execution.",
+    "done_when": "Commands accept a caller-provided index path, reject missing, unreadable, or invalid SCIP inputs through documented failure behavior, and expose a successfully loaded SCIP index boundary to query stories without compiling, type-checking, generating, or updating indexes.",
+    "scope": "Caller-provided index path validation and the official SCIP loading boundary. Excludes index generation, watching, caching, incremental updates, custom formats, ctags fallback behavior, and query traversal.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-095535-epic-planning-1.md#capability-cap-002---load-the-caller-selected-scip-index",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "Automation users can rely on stdout for successful structured JSON and stderr plus process status for all runtime failures across `scip-search` commands.",
+    "done_when": "Every successful runtime path writes structured JSON only to stdout, every shared runtime failure writes diagnostics only to stderr with a nonzero documented exit status, and shared invocation and index-loading error cases are covered across commands.",
+    "scope": "Shared stdout, stderr, exit-status, and runtime error conventions. Excludes query-specific result schemas, pretty-printing, progress output, configurable logging, human UI output, distribution docs, and install verification.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "epic_ref": "specs/epics/readme/20260517-095535-epic-planning-1.md#capability-cap-003---report-machine-readable-results-and-actionable-failures",
+    "depends_on": [
+      "0",
+      "1"
+    ]
+  }
+]
