@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	runtimecontract "scip-search/internal/runtime"
 )
@@ -70,19 +71,84 @@ func (rt Runtime) Route(args []string) (RoutedCommand, []string, bool) {
 	}, args[1:], true
 }
 
-// Run reports command routing usage failures before loader or handler work.
+// Run validates shared invocation shape, loads the selected index, and executes one handler.
 func (rt Runtime) Run(args []string, stdout io.Writer, stderr io.Writer) runtimecontract.Status {
-	_, _, ok := rt.Route(args)
-	if ok {
-		return runtimecontract.StatusOK
-	}
-
-	if len(args) == 0 {
+	routed, commandArgs, ok := rt.Route(args)
+	if !ok && len(args) == 0 {
 		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure("missing command"))
 	}
+	if !ok {
+		return runtimecontract.WriteDiagnostic(
+			stderr,
+			runtimecontract.UsageFailure(fmt.Sprintf("unsupported command: %s", args[0])),
+		)
+	}
 
-	return runtimecontract.WriteDiagnostic(
-		stderr,
-		runtimecontract.UsageFailure(fmt.Sprintf("unsupported command: %s", args[0])),
-	)
+	indexPath, handlerArgs, diagnostic, ok := parseSharedArgs(commandArgs)
+	if !ok {
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(diagnostic))
+	}
+
+	loadedIndex, err := rt.loader.Load(indexPath)
+	if err != nil {
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.IndexLoadFailure(err.Error()))
+	}
+
+	result, err := routed.Handler.Handle(loadedIndex, handlerArgs)
+	if err != nil {
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+	}
+
+	status, err := runtimecontract.WriteJSONSuccess(stdout, result)
+	if err != nil {
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+	}
+
+	return status
+}
+
+func parseSharedArgs(args []string) (string, []string, string, bool) {
+	var indexPath string
+	hasIndex := false
+	handlerArgs := make([]string, 0, len(args))
+
+	for position := 0; position < len(args); position++ {
+		arg := args[position]
+		if arg == "--index" {
+			if position+1 >= len(args) || strings.HasPrefix(args[position+1], "--") {
+				return "", nil, "--index requires a value", false
+			}
+
+			indexPath = args[position+1]
+			hasIndex = true
+			position++
+			continue
+		}
+
+		if isObviousAdditionalCommand(args, position) {
+			return "", nil, fmt.Sprintf("additional command token is not supported: %s", arg), false
+		}
+
+		handlerArgs = append(handlerArgs, arg)
+	}
+
+	if !hasIndex {
+		return "", nil, "missing --index", false
+	}
+
+	return indexPath, handlerArgs, "", true
+}
+
+func isObviousAdditionalCommand(args []string, position int) bool {
+	return isDocumentedCommand(args[position]) && (position == 0 || !strings.HasPrefix(args[position-1], "--"))
+}
+
+func isDocumentedCommand(arg string) bool {
+	for _, command := range documentedCommands {
+		if arg == command {
+			return true
+		}
+	}
+
+	return false
 }
