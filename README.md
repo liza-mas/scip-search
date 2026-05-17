@@ -57,7 +57,7 @@ scip-go gomod github.com/liza-mas/liza . agent/Doer#
 
 **`scip-search`** is a thin Go binary that:
 
-1. Loads a SCIP index file at the path provided as argument
+1. Loads a SCIP index file at the path provided with `--index`
 2. Answers a query using the SCIP Go bindings
 3. Prints structured JSON to stdout
 4. Exits
@@ -78,6 +78,16 @@ scip-search references --index /path/to/go.scip --symbol 'scip-go gomod github.c
 scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod github.com/liza-mas/liza . agent/Doer#'
 scip-search packages --index /path/to/go.scip
 ```
+
+### Runtime Contract
+
+All query commands require `--index <index-path>`.
+
+When a query command succeeds, `scip-search` writes exactly one JSON value to stdout, writes nothing to stderr, and exits with status `0`.
+
+Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
+
+After the shared runtime accepts an index path, failures while opening or loading that path belong to the subsequent index-loading boundary. This shared invocation contract does not define loader diagnostics, query result fields, or traversal behavior.
 
 ### Language Support
 
