@@ -40,3 +40,8 @@ func (failure Failure) Status() Status {
 func (failure Failure) Message() string {
 	return failure.message
 }
+
+// Error lets shared runtime failures cross Go error-returning boundaries.
+func (failure Failure) Error() string {
+	return failure.message
+}
