@@ -87,7 +87,11 @@ When a query command succeeds, `scip-search` writes exactly one JSON value to st
 
 Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
 
-After the shared runtime accepts an index path, failures while opening or loading that path belong to the subsequent index-loading boundary. This shared invocation contract does not define loader diagnostics, query result fields, or traversal behavior.
+After the shared runtime accepts an index path, every documented query command reads only the caller-supplied `--index` file for the current invocation. `scip-search` does not search for a default index, generate an index, update or delete the selected index, cache it for later runs, watch it for changes, compile or type-check source code, or parse a custom index format.
+
+Index-loading failures happen before the selected query handler runs. A nonexistent path, unreadable file, directory path, or readable file that is not valid SCIP input leaves stdout empty, writes a human-readable diagnostic to stderr, and exits with status `3`.
+
+Valid SCIP input is loaded through the official SCIP Go bindings before the selected query handler runs. This loading boundary does not define query result fields or traversal behavior.
 
 ### Language Support
 
