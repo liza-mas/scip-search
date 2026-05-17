@@ -106,6 +106,80 @@ func TestNewViewBuildsFromLoadedRuntimeIndexAndPreservesTraversalFacts(t *testin
 	assertSymbolFact(t, externalSymbols[0], SymbolSourceExternal, "")
 }
 
+func TestNewViewExposesEverySymbolAndOccurrenceInventoryFact(t *testing.T) {
+	t.Parallel()
+
+	localAlpha := "scip-go gomod example.com/project . cmd/Alpha()."
+	localBeta := "scip-go gomod example.com/project . pkg/Beta#"
+	externalGamma := "scip-go gomod example.com/dependency v1.2.3 dep/Gamma#"
+	externalDelta := "scip-go gomod example.com/dependency v1.2.3 dep/Delta()."
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath: "cmd/main.go",
+					Language:     "go",
+					Symbols: []*scip.SymbolInformation{
+						symbolInformation(localAlpha, scip.SymbolInformation_Function),
+						symbolInformation(localBeta, scip.SymbolInformation_Class),
+					},
+					Occurrences: []*scip.Occurrence{
+						{Symbol: localAlpha, Range: []int32{1, 2, 9}},
+						{Symbol: externalGamma, Range: []int32{3, 4, 10}},
+					},
+				},
+				{
+					RelativePath: "pkg/worker.go",
+					Language:     "go",
+					Occurrences: []*scip.Occurrence{
+						{Symbol: localBeta, Range: []int32{5, 1, 6}},
+					},
+				},
+			},
+			ExternalSymbols: []*scip.SymbolInformation{
+				symbolInformation(externalGamma, scip.SymbolInformation_Interface),
+				symbolInformation(externalDelta, scip.SymbolInformation_Method),
+			},
+		},
+	})
+
+	documents := view.Documents()
+	if got := collectSymbols(documents[0].Symbols); !slices.Equal(got, []string{localAlpha, localBeta}) {
+		t.Fatalf("first document symbols = %v, want every document-level symbol", got)
+	}
+	for _, symbol := range documents[0].Symbols {
+		if symbol.Source != SymbolSourceDocument || symbol.DocumentPath != "cmd/main.go" {
+			t.Fatalf("document symbol source/path = %q/%q, want document/cmd/main.go", symbol.Source, symbol.DocumentPath)
+		}
+	}
+	if len(documents[1].Symbols) != 0 {
+		t.Fatalf("second document symbols = %v, want empty collection", documents[1].Symbols)
+	}
+
+	externalSymbols := view.ExternalSymbols()
+	if got := collectSymbols(externalSymbols); !slices.Equal(got, []string{externalGamma, externalDelta}) {
+		t.Fatalf("external symbols = %v, want every index-level external symbol", got)
+	}
+	for _, symbol := range externalSymbols {
+		if symbol.Source != SymbolSourceExternal || symbol.DocumentPath != "" {
+			t.Fatalf("external symbol source/path = %q/%q, want external/empty path", symbol.Source, symbol.DocumentPath)
+		}
+	}
+
+	occurrences := view.Occurrences()
+	if got := collectOccurrenceSymbols(occurrences); !slices.Equal(got, []string{localAlpha, externalGamma, localBeta}) {
+		t.Fatalf("occurrence symbols = %v, want every referenced SCIP symbol", got)
+	}
+	if occurrences[0].DocumentPath != "cmd/main.go" ||
+		occurrences[1].DocumentPath != "cmd/main.go" ||
+		occurrences[2].DocumentPath != "pkg/worker.go" {
+		t.Fatalf("occurrence document paths = %q, %q, %q; want containing documents", occurrences[0].DocumentPath, occurrences[1].DocumentPath, occurrences[2].DocumentPath)
+	}
+	if got := collectOccurrenceSymbols(view.Occurrences()); !slices.Equal(got, collectOccurrenceSymbols(occurrences)) {
+		t.Fatalf("repeated occurrence enumeration = %v, want deterministic %v", got, collectOccurrenceSymbols(occurrences))
+	}
+}
+
 func TestNewViewKeepsEmptyInventoriesAsData(t *testing.T) {
 	t.Parallel()
 
@@ -213,6 +287,30 @@ func assertSymbolFact(t *testing.T, symbol Symbol, source SymbolSource, document
 	if symbol.EnclosingSymbol != "scip-go gomod example.com/project . cmd/" {
 		t.Fatalf("enclosing symbol = %q, want preserved metadata", symbol.EnclosingSymbol)
 	}
+}
+
+func symbolInformation(symbol string, kind scip.SymbolInformation_Kind) *scip.SymbolInformation {
+	return &scip.SymbolInformation{
+		Symbol:      symbol,
+		Kind:        kind,
+		DisplayName: symbol,
+	}
+}
+
+func collectSymbols(symbols []Symbol) []string {
+	collected := make([]string, 0, len(symbols))
+	for _, symbol := range symbols {
+		collected = append(collected, symbol.Symbol)
+	}
+	return collected
+}
+
+func collectOccurrenceSymbols(occurrences []Occurrence) []string {
+	collected := make([]string, 0, len(occurrences))
+	for _, occurrence := range occurrences {
+		collected = append(collected, occurrence.Symbol)
+	}
+	return collected
 }
 
 func traversalTestIndex() *scip.Index {
