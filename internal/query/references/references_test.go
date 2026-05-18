@@ -21,7 +21,7 @@ const (
 	unrelatedSymbol  = "scip-go gomod example.com/project . pkg/Unrelated#"
 )
 
-func TestQueryReturnsExactAndReferenceRelatedNonDefinitionOccurrences(t *testing.T) {
+func TestQueryReturnsExactAndDirectOutgoingReferenceRelatedNonDefinitionOccurrences(t *testing.T) {
 	t.Parallel()
 
 	result := references.Query(referenceFixtureView(), querySymbol)
@@ -32,12 +32,10 @@ func TestQueryReturnsExactAndReferenceRelatedNonDefinitionOccurrences(t *testing
 	gotSymbols := collectReferenceSymbols(result.References)
 	wantSymbols := []string{
 		querySymbol,
-		incomingSymbol,
 		relatedSymbol,
-		transitiveSymbol,
 	}
 	if !slices.Equal(gotSymbols, wantSymbols) {
-		t.Fatalf("reference symbols = %v, want exact and related symbols %v", gotSymbols, wantSymbols)
+		t.Fatalf("reference symbols = %v, want exact and direct outgoing related symbols %v", gotSymbols, wantSymbols)
 	}
 	for _, reference := range result.References {
 		if reference.Roles&int32(scip.SymbolRole_Definition) != 0 {
@@ -56,9 +54,7 @@ func TestQueryReturnsStableSourceOrder(t *testing.T) {
 	gotLocations := collectReferenceLocations(result.References)
 	wantLocations := []string{
 		"cmd/query.go:[8 1 8 15]:" + querySymbol,
-		"pkg/incoming.go:[9 0 8]:" + incomingSymbol,
 		"pkg/related.go:[10 2 14]:" + relatedSymbol,
-		"pkg/related.go:[10 2 14]:" + transitiveSymbol,
 	}
 	if !slices.Equal(gotLocations, wantLocations) {
 		t.Fatalf("reference order = %v, want %v", gotLocations, wantLocations)

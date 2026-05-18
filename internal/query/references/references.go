@@ -50,42 +50,15 @@ func Query(view traversal.View, symbol string) Payload {
 
 func referenceCandidateSymbols(view traversal.View, symbol string) map[string]struct{} {
 	seen := map[string]struct{}{symbol: {}}
-	queue := []string{symbol}
 
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		for _, relationship := range view.RelationshipsOwnedBy(current) {
-			if !relationship.IsReference {
-				continue
-			}
-			if addCandidate(seen, relationship.TargetSymbol) {
-				queue = append(queue, relationship.TargetSymbol)
-			}
+	for _, relationship := range view.RelationshipsOwnedBy(symbol) {
+		if !relationship.IsReference || relationship.TargetSymbol == "" {
+			continue
 		}
-		for _, relationship := range view.RelationshipsTargeting(current) {
-			if !relationship.IsReference {
-				continue
-			}
-			if addCandidate(seen, relationship.SourceSymbol) {
-				queue = append(queue, relationship.SourceSymbol)
-			}
-		}
+		seen[relationship.TargetSymbol] = struct{}{}
 	}
 
 	return seen
-}
-
-func addCandidate(seen map[string]struct{}, symbol string) bool {
-	if symbol == "" {
-		return false
-	}
-	if _, exists := seen[symbol]; exists {
-		return false
-	}
-	seen[symbol] = struct{}{}
-	return true
 }
 
 func isDefinition(occurrence traversal.Occurrence) bool {
