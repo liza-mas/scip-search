@@ -8,6 +8,7 @@ import (
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
 	"scip-search/internal/query/implementations"
+	"scip-search/internal/query/references"
 	runtimecontract "scip-search/internal/runtime"
 	"scip-search/internal/traversal"
 	"scip-search/internal/version"
@@ -29,7 +30,7 @@ func runWithBuildIdentity(
 ) runtimecontract.Status {
 	cliRuntime := cli.NewProductionRuntimeWithBuildIdentity(map[string]cli.Handler{
 		"symbols":         symbolsHandler{},
-		"references":      unimplementedHandler{},
+		"references":      referencesHandler{},
 		"implementations": implementationsHandler{},
 		"packages":        packagesHandler{},
 	}, buildIdentity)
@@ -82,10 +83,19 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 	return implementations.Implementations(traversal.NewView(loaded), symbol)
 }
 
-type unimplementedHandler struct{}
+type referencesHandler struct{}
 
-func (unimplementedHandler) Handle(_ any, _ []string) (any, error) {
-	return nil, errors.New("query execution is not implemented")
+func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
+	loaded, ok := loadedIndex.(runtimecontract.LoadedIndex)
+	if !ok {
+		return nil, errors.New("references handler received non-SCIP loaded index")
+	}
+	symbol, err := parseExactSymbolArg(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return references.Query(traversal.NewView(loaded), symbol), nil
 }
 
 func parseSymbolNameArg(args []string) (string, error) {
