@@ -18,7 +18,7 @@ func TestMakeInstallBuildsCurrentCheckoutAndInstallsExecutableSourceBuild(t *tes
 
 	result.requireSuccess(t)
 	result.requireSuccessOutput(t, harness.installedPath())
-	harness.requireForbiddenReleaseToolsUnused(t)
+	harness.requireForbiddenToolsUnused(t)
 	harness.requireInstalledSourceBuild(t, "make-install-test", "cafebabe")
 }
 
@@ -26,13 +26,10 @@ func TestMakeInstallFailsWhenGoIsMissingWithoutSuccessClaim(t *testing.T) {
 	t.Parallel()
 
 	harness := newMakeInstallHarness(t)
-	emptyPath := filepath.Join(t.TempDir(), "empty-path")
-	if err := os.MkdirAll(emptyPath, 0o755); err != nil {
-		t.Fatalf("create empty PATH directory: %v", err)
-	}
+	harness.linkHostTool(t, harness.toolDir, "make", harness.makePath)
 
 	result := harness.run(t, map[string]string{
-		"PATH": emptyPath,
+		"PATH": harness.toolDir,
 	})
 
 	result.requireFailure(t)
@@ -41,10 +38,31 @@ func TestMakeInstallFailsWhenGoIsMissingWithoutSuccessClaim(t *testing.T) {
 	harness.requireNotInstalled(t)
 }
 
+func TestMakeInstallFailsWhenMakeIsMissingWithoutSuccessClaim(t *testing.T) {
+	t.Parallel()
+
+	harness := newMakeInstallHarness(t)
+	goOnlyPath := filepath.Join(t.TempDir(), "go-only-path")
+	if err := os.MkdirAll(goOnlyPath, 0o755); err != nil {
+		t.Fatalf("create go-only PATH directory: %v", err)
+	}
+	harness.linkHostTool(t, goOnlyPath, "go", harness.goPath)
+
+	result := harness.run(t, map[string]string{
+		"PATH": goOnlyPath,
+	})
+
+	result.requireFailure(t)
+	result.requireDiagnostic(t, "make")
+	result.requireNoSuccessClaim(t)
+	harness.requireNotInstalled(t)
+}
+
 func TestMakeInstallFailsWhenSourceBuildFailsWithoutSuccessClaim(t *testing.T) {
 	t.Parallel()
 
 	harness := newMakeInstallHarness(t)
+	harness.linkHostTool(t, harness.toolDir, "make", harness.makePath)
 	fakeGo := harness.writeTool(t, "go", `#!/bin/sh
 printf '%s\n' "$*" >> "$SCIP_SEARCH_TEST_TOOL_LOG"
 exit 73
@@ -80,10 +98,13 @@ func TestMakeInstallFailsWhenInstallPathIsUnusableWithoutSuccessClaim(t *testing
 }
 
 type makeInstallHarness struct {
-	repoRoot    string
+	sourceDir   string
+	shellPath   string
 	makePath    string
+	goPath      string
 	installDir  string
 	buildDir    string
+	cacheDir    string
 	toolDir     string
 	toolLogPath string
 }
@@ -99,8 +120,17 @@ func newMakeInstallHarness(t *testing.T) *makeInstallHarness {
 	if err != nil {
 		t.Fatalf("make is required to validate make install: %v", err)
 	}
-	if _, err := exec.LookPath("go"); err != nil {
+	goPath, err := exec.LookPath("go")
+	if err != nil {
 		t.Fatalf("go is required to validate source make install: %v", err)
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("git is required to create controlled source checkouts: %v", err)
+	}
+	shellPath, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatalf("sh is required to validate the README make install workflow: %v", err)
 	}
 
 	root := t.TempDir()
@@ -108,16 +138,22 @@ func newMakeInstallHarness(t *testing.T) *makeInstallHarness {
 	if err := os.MkdirAll(toolDir, 0o755); err != nil {
 		t.Fatalf("create tool dir: %v", err)
 	}
+	sourceDir := filepath.Join(root, "source")
 
 	harness := &makeInstallHarness{
-		repoRoot:    repoRoot,
+		sourceDir:   sourceDir,
+		shellPath:   shellPath,
 		makePath:    makePath,
+		goPath:      goPath,
 		installDir:  filepath.Join(root, "install"),
 		buildDir:    filepath.Join(root, "build"),
+		cacheDir:    filepath.Join(root, "go-cache"),
 		toolDir:     toolDir,
 		toolLogPath: filepath.Join(root, "tool.log"),
 	}
-	for _, name := range []string{"curl", "wget"} {
+	runCommand(t, gitPath, "clone", "--quiet", repoRoot, sourceDir)
+
+	for _, name := range []string{"curl", "wget", "scip-go", "scip-typescript", "scip-python", "rust-analyzer", "scip-search"} {
 		harness.writeTool(t, name, `#!/bin/sh
 printf '%s\n' "$0 $*" >> "$SCIP_SEARCH_TEST_TOOL_LOG"
 exit 97
@@ -130,15 +166,18 @@ exit 97
 func (h *makeInstallHarness) run(t *testing.T, env map[string]string) makeInstallResult {
 	t.Helper()
 
-	cmd := exec.Command(h.makePath, "-C", h.repoRoot, "install",
-		"INSTALL_DIR="+h.installDir,
-		"BUILD_DIR="+h.buildDir,
-		"SOURCE_REF=make-install-test",
-		"SOURCE_REVISION=cafebabe",
-	)
+	cmd := exec.Command(h.shellPath, "-c", `make -C "$SCIP_SEARCH_TEST_SOURCE_DIR" install INSTALL_DIR="$SCIP_SEARCH_TEST_INSTALL_DIR" BUILD_DIR="$SCIP_SEARCH_TEST_BUILD_DIR" SOURCE_REF=make-install-test SOURCE_REVISION=cafebabe`)
+	cmd.Dir = t.TempDir()
 	cmd.Env = append(cleanMakeInstallEnv(),
 		"HOME="+filepath.Join(t.TempDir(), "home"),
+		"GOPATH="+filepath.Join(h.cacheDir, "gopath"),
+		"GOMODCACHE="+filepath.Join(h.cacheDir, "gopath", "pkg", "mod"),
+		"GOCACHE="+filepath.Join(h.cacheDir, "build"),
+		"GOFLAGS=-modcacherw",
 		"PATH="+h.toolDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"SCIP_SEARCH_TEST_SOURCE_DIR="+h.sourceDir,
+		"SCIP_SEARCH_TEST_INSTALL_DIR="+h.installDir,
+		"SCIP_SEARCH_TEST_BUILD_DIR="+h.buildDir,
 		"SCIP_SEARCH_TEST_TOOL_LOG="+h.toolLogPath,
 		"VERSION=v9.9.9",
 		"SCIP_SEARCH_RELEASES_FILE="+filepath.Join(t.TempDir(), "releases.tsv"),
@@ -169,6 +208,16 @@ func (h *makeInstallHarness) writeTool(t *testing.T, name string, content string
 	path := filepath.Join(h.toolDir, name)
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatalf("write tool shim %s: %v", path, err)
+	}
+	return path
+}
+
+func (h *makeInstallHarness) linkHostTool(t *testing.T, dir, name, hostPath string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, name)
+	if err := os.Symlink(hostPath, path); err != nil {
+		t.Fatalf("link host tool %s to %s: %v", name, path, err)
 	}
 	return path
 }
@@ -215,13 +264,13 @@ func (h *makeInstallHarness) requireNotInstalled(t *testing.T) {
 	}
 }
 
-func (h *makeInstallHarness) requireForbiddenReleaseToolsUnused(t *testing.T) {
+func (h *makeInstallHarness) requireForbiddenToolsUnused(t *testing.T) {
 	t.Helper()
 
 	if data, err := os.ReadFile(h.toolLogPath); err == nil {
-		t.Fatalf("make install invoked release artifact tooling:\n%s", data)
+		t.Fatalf("make install invoked forbidden release, indexer, or query tooling:\n%s", data)
 	} else if !os.IsNotExist(err) {
-		t.Fatalf("read release tool log: %v", err)
+		t.Fatalf("read forbidden tool log: %v", err)
 	}
 }
 
@@ -296,6 +345,10 @@ func cleanMakeInstallEnv() []string {
 	blocked := map[string]bool{
 		"BUILD_DIR":                 true,
 		"GO":                        true,
+		"GOCACHE":                   true,
+		"GOFLAGS":                   true,
+		"GOMODCACHE":                true,
+		"GOPATH":                    true,
 		"HOME":                      true,
 		"INSTALL_DIR":               true,
 		"SCIP_SEARCH_RELEASES_FILE": true,
@@ -325,5 +378,5 @@ func TestMakeInstallRequiresNoReleaseArtifactLookup(t *testing.T) {
 	})
 
 	result.requireSuccess(t)
-	harness.requireForbiddenReleaseToolsUnused(t)
+	harness.requireForbiddenToolsUnused(t)
 }
