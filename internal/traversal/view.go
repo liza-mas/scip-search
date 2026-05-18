@@ -115,6 +115,8 @@ func buildDocument(document *scip.Document) Document {
 		RelativePath:     document.GetRelativePath(),
 		Language:         document.GetLanguage(),
 		PositionEncoding: document.GetPositionEncoding(),
+		Symbols:          make([]Symbol, 0, len(document.GetSymbols())),
+		Occurrences:      make([]Occurrence, 0, len(document.GetOccurrences())),
 	}
 
 	for _, symbol := range document.GetSymbols() {

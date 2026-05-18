@@ -432,6 +432,39 @@ func TestNewViewKeepsEmptyInventoriesAsData(t *testing.T) {
 	}
 }
 
+func TestNewViewKeepsEmptyDocumentCollectionsEnumerable(t *testing.T) {
+	t.Parallel()
+
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath:     "pkg/empty.go",
+					Language:         "go",
+					PositionEncoding: scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart,
+				},
+			},
+		},
+	})
+
+	documents := view.Documents()
+	if len(documents) != 1 {
+		t.Fatalf("document count = %d, want 1", len(documents))
+	}
+	if documents[0].Symbols == nil {
+		t.Fatal("empty document symbols = nil, want enumerable empty collection")
+	}
+	if len(documents[0].Symbols) != 0 {
+		t.Fatalf("empty document symbols = %v, want empty", documents[0].Symbols)
+	}
+	if documents[0].Occurrences == nil {
+		t.Fatal("empty document occurrences = nil, want enumerable empty collection")
+	}
+	if len(documents[0].Occurrences) != 0 {
+		t.Fatalf("empty document occurrences = %v, want empty", documents[0].Occurrences)
+	}
+}
+
 func TestNewViewUsesOnlyLoadedIndexData(t *testing.T) {
 	t.Parallel()
 
