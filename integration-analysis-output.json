@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "desc": "Wire production symbols and packages command handlers into the user-facing CLI binary, replacing unimplementedHandler with real loaded-index traversal and discovery implementations, and add command-level tests proving the production command path reaches those implementations",
+    "done_when": "scip-search symbols --index <shared-fixture> --name Supervisor and scip-search packages --index <shared-fixture> both exit 0, write no stderr, and emit the expected JSON shapes through the normal cmd/scip-search production path; missing --name for symbols and invalid package flags remain usage failures; references and implementations remain unimplemented; make test passes",
+    "scope": "cmd/scip-search/main.go production handler wiring for symbols and packages only, plus command-level tests in cmd/scip-search/main_test.go that exercise the production registry with the deterministic SCIP fixture. Out of scope: references or implementations query behavior, discovery package internals, traversal changes, install scripts, documentation",
+    "spec_ref": "README.md#what-is-scip-search"
+  }
+]
