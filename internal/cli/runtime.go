@@ -20,7 +20,7 @@ var documentedCommands = []string{
 const helpText = `Usage:
   scip-search --help
   scip-search --version
-  scip-search symbols --index <index-path> --name <name> [--flat]
+  scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
   scip-search references --index <index-path> --symbol <scip-symbol>
   scip-search implementations --index <index-path> --symbol <scip-symbol>
   scip-search packages --index <index-path> [--prefix <prefix>]
@@ -149,12 +149,20 @@ func (rt Runtime) Run(args []string, stdout io.Writer, stderr io.Writer) runtime
 		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
 	}
 
-	status, err := runtimecontract.WriteJSONSuccess(stdout, result)
+	status, err := writeSuccess(stdout, result)
 	if err != nil {
 		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
 	}
 
 	return status
+}
+
+func writeSuccess(stdout io.Writer, result any) (runtimecontract.Status, error) {
+	if raw, ok := result.(runtimecontract.RawOutput); ok {
+		return runtimecontract.WriteRawSuccess(stdout, raw.Text)
+	}
+
+	return runtimecontract.WriteJSONSuccess(stdout, result)
 }
 
 func parseSharedArgs(args []string) (string, []string, string, bool) {

@@ -121,7 +121,7 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Usage:",
-		"scip-search symbols --index <index-path> --name <name>",
+		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
 		"scip-search references --index <index-path> --symbol <scip-symbol>",
 		"scip-search implementations --index <index-path> --symbol <scip-symbol>",
 		"scip-search packages --index <index-path> [--prefix <prefix>]",
@@ -537,6 +537,30 @@ func TestRunWithIndexLoadsAndExecutesOnlySelectedHandler(t *testing.T) {
 			assertOtherHandlersNotCalled(t, handlers, command)
 			assertSingleJSONValue(t, stdout.Bytes(), map[string]string{"command": command})
 		})
+	}
+}
+
+func TestRunWritesRawOutputWithoutJSONEncoding(t *testing.T) {
+	t.Parallel()
+
+	loader := &recordingLoader{loaded: &loadedContext{id: "symbols"}}
+	handlers := newRecordingHandlers()
+	selected := handlers["symbols"].(*recordingHandler)
+	selected.result = runtimecontract.RawOutput{Text: "path.go:1:1:symbol\n"}
+	cliRuntime := NewRuntime(loader, handlers)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := cliRuntime.Run([]string{"symbols", "--index", "/tmp/repo.scip", "--name", "Symbol"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("Run() status = %d, want %d", status, runtimecontract.StatusOK)
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if stdout.String() != "path.go:1:1:symbol\n" {
+		t.Fatalf("stdout = %q, want raw output without JSON encoding", stdout.String())
 	}
 }
 

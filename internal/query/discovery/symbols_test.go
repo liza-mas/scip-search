@@ -19,6 +19,8 @@ const (
 	patternCharacterSymbol    = "scip-go gomod github.com/liza-mas/liza . patterns/Name[.*]()."
 	supervisorConfigSymbol    = "scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#"
 	supervisorSymbol          = "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#"
+	escapedMatchSymbol        = "scip-go gomod github.com/liza-mas/liza . supervisor/Escaped#"
+	shortRangeSymbol          = "scip-go gomod github.com/liza-mas/liza . supervisor/ShortRange#"
 	runSymbol                 = "scip-go gomod github.com/liza-mas/liza . supervisor/Run()."
 )
 
@@ -219,6 +221,65 @@ func TestSymbolsByNameReturnsExplicitEmptyPackageCollectionForMissingName(t *tes
 	}
 }
 
+func TestOneLineSymbolsByNameFormatsStableGrepStyleLines(t *testing.T) {
+	t.Parallel()
+
+	got, err := discovery.OneLineSymbolsByName(discoveryFixtureView(), "Supervisor")
+	if err != nil {
+		t.Fatalf("OneLineSymbolsByName() error = %v", err)
+	}
+
+	want := strings.Join([]string{
+		"?:0:0:scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent# match=displayName text=SupervisorAgent",
+		"supervisor/supervisor.go:11:6:scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor# match=displayName text=Supervisor",
+		"?:0:0:scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig# match=descriptor text=supervisor/SupervisorConfig#",
+		"",
+	}, "\n")
+	if got != want {
+		t.Fatalf("one-line output = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineSymbolsByNameReturnsEmptyOutputForMissingName(t *testing.T) {
+	t.Parallel()
+
+	got, err := discovery.OneLineSymbolsByName(discoveryFixtureView(), "DoesNotExist")
+	if err != nil {
+		t.Fatalf("OneLineSymbolsByName() error = %v", err)
+	}
+	if got != "" {
+		t.Fatalf("one-line output = %q, want empty stdout", got)
+	}
+}
+
+func TestOneLineSymbolsByNameEscapesMatchTextControls(t *testing.T) {
+	t.Parallel()
+
+	got, err := discovery.OneLineSymbolsByName(discoveryFixtureView(), "Escaped")
+	if err != nil {
+		t.Fatalf("OneLineSymbolsByName() error = %v", err)
+	}
+
+	want := "supervisor/supervisor.go:31:3:scip-go gomod github.com/liza-mas/liza . supervisor/Escaped# match=displayName text=Escaped\\\\Name\\nWith\\rTab\\tEnd\n"
+	if got != want {
+		t.Fatalf("one-line output = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineSymbolsByNameFallsBackForShortDefinitionRange(t *testing.T) {
+	t.Parallel()
+
+	got, err := discovery.OneLineSymbolsByName(discoveryFixtureView(), "ShortRange")
+	if err != nil {
+		t.Fatalf("OneLineSymbolsByName() error = %v", err)
+	}
+
+	want := "supervisor/supervisor.go:0:0:scip-go gomod github.com/liza-mas/liza . supervisor/ShortRange# match=displayName text=ShortRange\n"
+	if got != want {
+		t.Fatalf("one-line output = %q, want %q", got, want)
+	}
+}
+
 func discoveryFixtureView() traversal.View {
 	return traversal.NewView(runtimecontract.LoadedIndex{
 		Index: &scip.Index{
@@ -230,11 +291,23 @@ func discoveryFixtureView() traversal.View {
 						{Symbol: supervisorConfigSymbol, DisplayName: "Config"},
 						{Symbol: lowercaseSupervisorSymbol, DisplayName: "supervisor"},
 						{Symbol: supervisorSymbol, DisplayName: "Supervisor"},
+						{Symbol: escapedMatchSymbol, DisplayName: "Escaped\\Name\nWith\rTab\tEnd"},
+						{Symbol: shortRangeSymbol, DisplayName: "ShortRange"},
 					},
 					Occurrences: []*scip.Occurrence{
 						{
 							Symbol:      supervisorSymbol,
 							Range:       []int32{10, 5, 15},
+							SymbolRoles: int32(scip.SymbolRole_Definition),
+						},
+						{
+							Symbol:      escapedMatchSymbol,
+							Range:       []int32{30, 2, 7},
+							SymbolRoles: int32(scip.SymbolRole_Definition),
+						},
+						{
+							Symbol:      shortRangeSymbol,
+							Range:       []int32{40},
 							SymbolRoles: int32(scip.SymbolRole_Definition),
 						},
 					},

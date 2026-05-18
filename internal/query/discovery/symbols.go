@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -133,6 +134,69 @@ func FlatSymbolsByName(view traversal.View, name string) (SymbolsPayload, error)
 	})
 
 	return SymbolsPayload{Symbols: results}, nil
+}
+
+func OneLineSymbolsByName(view traversal.View, name string) (string, error) {
+	flat, err := FlatSymbolsByName(view, name)
+	if err != nil {
+		return "", err
+	}
+	if len(flat.Symbols) == 0 {
+		return "", nil
+	}
+
+	var builder strings.Builder
+	for _, symbol := range flat.Symbols {
+		identity, err := scipmodel.ParseIdentity(symbol.Symbol)
+		if err != nil {
+			return "", err
+		}
+		path, line, column := oneLineLocation(symbol.Definition)
+		fmt.Fprintf(
+			&builder,
+			"%s:%d:%d:%s %s match=%s text=%s\n",
+			path,
+			line,
+			column,
+			identity.PackageKey(),
+			identity.Descriptor,
+			symbol.MatchSource,
+			escapeOneLineValue(symbol.MatchText),
+		)
+	}
+
+	return builder.String(), nil
+}
+
+func oneLineLocation(definition *Definition) (string, int32, int32) {
+	if definition == nil {
+		return "?", 0, 0
+	}
+	if len(definition.Range) < 2 {
+		return definition.DocumentPath, 0, 0
+	}
+
+	return definition.DocumentPath, definition.Range[0] + 1, definition.Range[1] + 1
+}
+
+func escapeOneLineValue(value string) string {
+	var builder strings.Builder
+	for _, char := range value {
+		switch char {
+		case '\\':
+			builder.WriteString(`\\`)
+		case '\n':
+			builder.WriteString(`\n`)
+		case '\r':
+			builder.WriteString(`\r`)
+		case '\t':
+			builder.WriteString(`\t`)
+		default:
+			builder.WriteRune(char)
+		}
+	}
+
+	return builder.String()
 }
 
 func symbolsInView(view traversal.View) []traversal.Symbol {

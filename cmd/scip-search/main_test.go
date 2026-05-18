@@ -92,7 +92,7 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Usage:",
-		"scip-search symbols --index <index-path> --name <name>",
+		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
 		"scip-search references --index <index-path> --symbol <scip-symbol>",
 		"scip-search implementations --index <index-path> --symbol <scip-symbol>",
 		"scip-search packages --index <index-path> [--prefix <prefix>]",
@@ -304,7 +304,7 @@ func TestRunValidGeneratedSCIPLoadsReachQueryBoundaryAcrossDocumentedCommands(t 
 	}
 }
 
-func TestRunProductionSymbolsCommandUsesDiscoveryImplementation(t *testing.T) {
+func TestRunProductionSymbolsCommandDefaultsToOneLineOutput(t *testing.T) {
 	t.Parallel()
 
 	fixture := traversaltest.LoadSharedFixture(t)
@@ -319,33 +319,79 @@ func TestRunProductionSymbolsCommandUsesDiscoveryImplementation(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json")
+	want := strings.Join([]string{
+		"supervisor/run.go:15:6:scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent# match=displayName text=SupervisorAgent",
+		"supervisor/supervisor.go:11:6:scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor# match=displayName text=Supervisor",
+		"supervisor/supervisor.go:19:6:scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig# match=descriptor text=supervisor/SupervisorConfig#",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("symbols stdout = %q, want one-line output %q", stdout.String(), want)
+	}
 }
 
-func TestRunProductionSymbolsCommandAcceptsFlatOutput(t *testing.T) {
+func TestRunProductionSymbolsCommandAcceptsExplicitOneLineOutput(t *testing.T) {
 	t.Parallel()
 
 	fixture := traversaltest.LoadSharedFixture(t)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Supervisor", "--flat"}, &stdout, &stderr)
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Run", "--one-line"}, &stdout, &stderr)
 
 	if status != runtimecontract.StatusOK {
-		t.Fatalf("symbols flat status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+		t.Fatalf("symbols --one-line status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if want := "supervisor/run.go:7:6:scip-go gomod github.com/liza-mas/liza . supervisor/Run(). match=displayName text=Run\n"; stdout.String() != want {
+		t.Fatalf("symbols --one-line stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunProductionSymbolsCommandAcceptsNestedJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Supervisor", "--nested-json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols --nested-json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json")
+}
+
+func TestRunProductionSymbolsCommandAcceptsJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Supervisor", "--json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
-		t.Fatalf("symbols flat stdout JSON decode failed: %v; output = %q", err, stdout.String())
+		t.Fatalf("symbols --json stdout JSON decode failed: %v; output = %q", err, stdout.String())
 	}
 	if _, ok := payload["symbols"].([]any); !ok {
-		t.Fatalf("symbols flat payload = %#v, want top-level symbols array", payload)
+		t.Fatalf("symbols --json payload = %#v, want top-level symbols array", payload)
 	}
 	if _, ok := payload["packages"]; ok {
-		t.Fatalf("symbols flat payload = %#v, want no top-level packages field", payload)
+		t.Fatalf("symbols --json payload = %#v, want no top-level packages field", payload)
 	}
 }
 
@@ -513,6 +559,21 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			name:    "symbols duplicate name",
 			command: "symbols",
 			args:    []string{"--name", "Supervisor", "--name", "Run"},
+		},
+		{
+			name:    "symbols duplicate one-line",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "--one-line", "--one-line"},
+		},
+		{
+			name:    "symbols output flags conflict",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "--one-line", "--json"},
+		},
+		{
+			name:    "symbols flat renamed",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "--flat"},
 		},
 		{
 			name:    "symbols unknown trailing flag",

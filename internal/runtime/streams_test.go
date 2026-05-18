@@ -97,6 +97,25 @@ func TestWriteJSONSuccessEmitsOneParseableValueAndNewline(t *testing.T) {
 	}
 }
 
+func TestWriteRawSuccessWritesTextExactly(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	text := "first line\nsecond line\n"
+
+	status, err := WriteRawSuccess(&stdout, text)
+	if err != nil {
+		t.Fatalf("WriteRawSuccess() error = %v", err)
+	}
+
+	if status != StatusOK {
+		t.Fatalf("WriteRawSuccess() status = %d, want %d", status, StatusOK)
+	}
+	if stdout.String() != text {
+		t.Fatalf("stdout = %q, want exact raw text %q", stdout.String(), text)
+	}
+}
+
 func TestWriteJSONSuccessAcceptsAnonymousStructResults(t *testing.T) {
 	t.Parallel()
 

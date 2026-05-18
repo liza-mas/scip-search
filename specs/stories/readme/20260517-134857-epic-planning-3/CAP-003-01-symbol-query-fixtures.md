@@ -3,7 +3,7 @@
 Status: review
 
 ## Goal
-Maintainers can validate `scip-search symbols --name <name>` against a small deterministic SCIP fixture matrix that proves literal partial matching, ambiguous names, empty successful results, compact package grouping, exact full symbol reconstruction, and stable ordering.
+Maintainers can validate `scip-search symbols --name <name>` against a small deterministic SCIP fixture matrix that proves literal partial matching, ambiguous names, empty successful results, one-line output, JSON package grouping, exact full symbol reconstruction, and stable ordering.
 
 ## Parent Epic
 `specs/epics/readme/20260517-134857-epic-planning-3.md` - Capability CAP-003, "Validate discovery queries with fixtures"
@@ -13,7 +13,7 @@ Symbol discovery behavior is defined by CAP-001. This document defines only the 
 
 ## Personas
 - **CLI Maintainer**: a Go developer maintaining `scip-search`, needing bounded query fixtures that catch regressions in symbol discovery behavior.
-- **Automation Agent**: an AI or script-driven caller running `scip-search` in a terminal or sandbox, needing deterministic JSON results and exact full SCIP symbol strings for follow-up commands.
+- **Automation Agent**: an AI or script-driven caller running `scip-search` in a terminal or sandbox, needing deterministic symbol results and exact full SCIP symbol strings for follow-up commands.
 
 ## General information
 
@@ -21,7 +21,7 @@ Applies to: symbol discovery fixture coverage for successful `symbols --name` qu
 
 ### References
 - goal spec: `README.md#scip-symbol-format` - Defines full SCIP symbol structure and partial-name discovery requirements.
-- goal spec: `README.md#what-is-scip-search` - Documents `scip-search symbols --index <index-path> --name <name>` and structured JSON success output.
+- goal spec: `README.md#what-is-scip-search` - Documents `scip-search symbols --index <index-path> --name <name>` and symbol output modes.
 - parent epic: `specs/epics/readme/20260517-134857-epic-planning-3.md#general-information` - Requires deterministic ordering, explicit empty collections, and small query-specific fixtures.
 - parent epic: `specs/epics/readme/20260517-134857-epic-planning-3.md#capability-cap-003---validate-discovery-queries-with-fixtures` - Defines discovery-query fixture and golden JSON validation scope.
 - consistency check: `specs/stories/readme/20260517-134857-epic-planning-3/cap-001-symbol-name-discovery.md` - Defines symbol matching, payload fields, and existing symbol-query fixture expectations that this document must preserve.
@@ -36,10 +36,10 @@ Applies to: symbol discovery fixture coverage for successful `symbols --name` qu
 ### Related External Components
 - Component C-001 - SCIP symbol identifiers: Human-readable symbol strings containing scheme, package manager, package name, package version, and descriptors.
 - Component C-002 - SCIP traversal view: The shared traversal input that exposes symbol inventories and definition context to query behavior.
-- Component C-003 - Query fixture set: Deterministic SCIP test data and expected JSON cases used by maintainers to validate discovery queries.
+- Component C-003 - Query fixture set: Deterministic SCIP test data, expected one-line cases, and expected JSON cases used by maintainers to validate discovery queries.
 
 ### Interfaces
-- I-001-001 - Symbol discovery query contract (Interface 001 of Component C-001): The default `symbols --name` query accepts literal partial text and returns a successful JSON payload with a `packages` collection of package identities containing nested matched symbol descriptors.
+- I-001-001 - Symbol discovery query contract (Interface 001 of Component C-001): The default `symbols --name` query accepts literal partial text and returns one grep-style line per result. `symbols --name --nested-json` returns a successful JSON payload with a `packages` collection of package identities containing nested matched symbol descriptors.
 
 ### Out of Scope
 - Package discovery fixture cases, package JSON shape, package prefix filtering, and package de-duplication.
@@ -69,9 +69,9 @@ Applies to: symbol discovery fixture coverage for successful `symbols --name` qu
 
 ### Acceptance Criteria
 - AC-001-1: Given the symbol fixture contains at least the full symbols `scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#`, `scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#`, `scip-go gomod github.com/liza-mas/liza . supervisor/Run().`, and `scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#`, when maintainers run the fixture-backed symbol query cases, then the fixture provides deterministic data for exact-looking partial, substring, and overlapping-name matches.
-- AC-001-2: Given the query case `symbols --name Supervisor`, when maintainers evaluate the golden result, then the successful `packages` collection includes every fixture symbol descriptor whose display or descriptor text contains `Supervisor`, including multiple matches rather than an ambiguity failure.
-- AC-001-3: Given the query case `symbols --name Run`, when maintainers evaluate the golden result, then the successful `packages` collection includes the matching `supervisor/Run().` descriptor under its package identity and does not include non-matching `Supervisor` fixture symbols solely because they share a package.
-- AC-001-4: Given any non-empty symbol golden result, when maintainers inspect result entries, then each package entry asserts package identity fields and each nested symbol entry asserts the exact descriptor and match context fields required by the CAP-001 symbol payload contract.
+- AC-001-2: Given the query case `symbols --name Supervisor`, when maintainers evaluate the default result, then the successful one-line output includes every fixture symbol descriptor whose display or descriptor text contains `Supervisor`, including multiple matches rather than an ambiguity failure.
+- AC-001-3: Given the query case `symbols --name Run`, when maintainers evaluate the default result, then the successful one-line output includes the matching `supervisor/Run().` descriptor under its package identity and does not include non-matching `Supervisor` fixture symbols solely because they share a package.
+- AC-001-4: Given any non-empty symbol fixture result, when maintainers inspect result entries, then each one-line entry asserts the exact descriptor, package key, match context, and definition location prefix required by the CAP-001 symbol payload contract, and JSON mode cases assert package identity fields.
 - AC-001-5: Given a symbol query produces more than one match, when maintainers compare the golden result order across repeated validation runs, then reconstructed full symbols appear in stable ascending order by the observable full symbol value.
 
 ### Depends on:
@@ -105,9 +105,9 @@ Run time coupling:
 **As a** CLI Maintainer, **I want to** validate no-match symbol discovery with a deterministic golden case, **so that** successful absence of matching symbols remains distinguishable from invocation or index-loading failures.
 
 ### Acceptance Criteria
-- AC-002-1: Given the symbol fixture contains no symbol whose display or descriptor text contains `DoesNotExist`, when maintainers run the query case `symbols --name DoesNotExist`, then the golden result is a successful payload with an empty `packages` collection.
+- AC-002-1: Given the symbol fixture contains no symbol whose display or descriptor text contains `DoesNotExist`, when maintainers run the query case `symbols --name DoesNotExist`, then the default successful result is empty stdout and the `--nested-json` golden result is a successful payload with an empty `packages` collection.
 - AC-002-2: Given the no-match symbol query case is evaluated, when maintainers inspect the golden result, then it does not assert stderr diagnostics, nonzero process status, shared runtime error fields, or suggestions for nearby symbols.
-- AC-002-3: Given the same no-match symbol query case is evaluated repeatedly against the same fixture, when maintainers compare the golden JSON, then the empty `packages` collection remains stable and explicit.
+- AC-002-3: Given the same no-match symbol query case is evaluated repeatedly against the same fixture, when maintainers compare the default output and golden JSON, then empty stdout and the empty `packages` collection remain stable and explicit.
 
 ### Depends on:
 Implementation ordering:
@@ -121,7 +121,7 @@ Run time coupling:
 - Suggesting alternate symbol names or fallback search modes.
 
 ### Assumptions
-- **ASM-002-1**: The no-match symbol golden case uses the same top-level `packages` collection as non-empty default symbol results. - *Why*: The parent epic requires explicit empty result collections for successful no-match cases, and CAP-001 defines compact package grouping as the default. - Confidence: HIGH
+- **ASM-002-1**: The no-match symbol JSON golden case uses the same top-level `packages` collection as non-empty `--nested-json` symbol results. - *Why*: The parent epic requires explicit empty result collections for successful no-match JSON cases, and CAP-001 defines one-line empty output separately as empty stdout. - Confidence: HIGH
 
 ### Open Questions
 - None.

@@ -67,7 +67,7 @@ Cold start is milliseconds — loads a pre-built binary index, performs no compi
 ```bash
 scip-search --help
 scip-search --version
-scip-search symbols --index <index-path> --name <name> [--flat]
+scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
 scip-search references --index <index-path> --symbol <scip-symbol>
 scip-search implementations --index <index-path> --symbol <scip-symbol>
 scip-search packages --index <index-path> [--prefix <prefix>]
@@ -76,7 +76,8 @@ scip-search packages --index <index-path> [--prefix <prefix>]
 Examples:
 ```bash
 scip-search symbols --index /path/to/go.scip --name SymbolSource
-scip-search symbols --index /path/to/go.scip --name SymbolSource --flat
+scip-search symbols --index /path/to/go.scip --name SymbolSource --nested-json
+scip-search symbols --index /path/to/go.scip --name SymbolSource --json
 scip-search references --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSource#'
 scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#'
 scip-search packages --index /path/to/go.scip
@@ -88,9 +89,17 @@ All query commands require `--index <index-path>`.
 
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
-When a query command succeeds, `scip-search` writes exactly one JSON value to stdout, writes nothing to stderr, and exits with status `0`.
+When a query command succeeds, `scip-search` writes the selected output format to stdout, writes nothing to stderr, and exits with status `0`. `references`, `implementations`, `packages`, `symbols --nested-json`, and `symbols --json` write exactly one JSON value to stdout. The default `symbols --name` output is one-line text.
 
-By default, `symbols --name` returns a compact package-grouped payload. Use `--flat` to return one self-contained entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result.
+By default, `symbols --name` returns one grep-style line per matched symbol:
+
+```text
+<path>:<line>:<column>:<packageKey> <descriptor> match=<matchSource> text=<matchText>
+```
+
+`--one-line` explicitly selects the default one-line output. `--nested-json` returns the compact package-grouped payload. `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result.
+
+In one-line output, `line` and `column` are the SCIP definition range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata after the third colon is grep-style human-readable text. `matchText` escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line.
 
 Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
 

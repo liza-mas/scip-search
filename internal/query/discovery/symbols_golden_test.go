@@ -55,7 +55,7 @@ func TestSymbolsCommandGoldenJSON(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			stdout := runSymbolsCommand(t, test.queryName)
+			stdout := runSymbolsCommand(t, test.queryName, "--nested-json")
 			got := decodeJSONValue(t, stdout)
 			want := readGoldenJSONValue(t, test.goldenFile)
 
@@ -67,10 +67,10 @@ func TestSymbolsCommandGoldenJSON(t *testing.T) {
 	}
 }
 
-func TestSymbolsFlatCommandPreservesFlatPayload(t *testing.T) {
+func TestSymbolsJSONCommandPreservesSelfContainedPayload(t *testing.T) {
 	t.Parallel()
 
-	stdout := runSymbolsCommand(t, "Supervisor", "--flat")
+	stdout := runSymbolsCommand(t, "Supervisor", "--json")
 	got := decodeJSONValue(t, stdout)
 
 	assertGoldenFlatSymbolsPayload(t, got, []string{
@@ -113,43 +113,54 @@ func (symbolsCommandHandler) Handle(loadedIndex any, args []string) (any, error)
 	if !ok {
 		return nil, errors.New("symbols handler received non-SCIP loaded index")
 	}
-	name, flat, err := parseSymbolArgs(args)
+	name, outputMode, err := parseSymbolArgs(args)
 	if err != nil {
 		return nil, err
 	}
-	if flat {
+	if outputMode == symbolsOutputJSON {
 		return discovery.FlatSymbolsByName(traversal.NewView(loaded), name)
 	}
 
 	return discovery.SymbolsByName(traversal.NewView(loaded), name)
 }
 
-func parseSymbolArgs(args []string) (string, bool, error) {
+type symbolsOutputMode int
+
+// Golden tests exercise only JSON symbol output modes; one-line formatting is
+// covered in symbols_test.go and the production CLI tests.
+const (
+	symbolsOutputNestedJSON symbolsOutputMode = iota
+	symbolsOutputJSON
+)
+
+func parseSymbolArgs(args []string) (string, symbolsOutputMode, error) {
 	name := ""
 	hasName := false
-	flat := false
+	outputMode := symbolsOutputNestedJSON
 	for position := 0; position < len(args); position++ {
 		switch args[position] {
-		case "--flat":
-			flat = true
+		case "--nested-json":
+			outputMode = symbolsOutputNestedJSON
+		case "--json":
+			outputMode = symbolsOutputJSON
 		case "--name":
 			if position+1 >= len(args) || args[position+1] == "" {
-				return "", false, errors.New("--name requires a value")
+				return "", symbolsOutputNestedJSON, errors.New("--name requires a value")
 			}
 			name = args[position+1]
 			hasName = true
 			position++
 		default:
-			return "", false, errors.New("symbols only accepts --name and --flat")
+			return "", symbolsOutputNestedJSON, errors.New("symbols only accepts --name, --nested-json, and --json")
 
 		}
 	}
 
 	if !hasName {
-		return "", false, errors.New("missing --name")
+		return "", symbolsOutputNestedJSON, errors.New("missing --name")
 	}
 
-	return name, flat, nil
+	return name, outputMode, nil
 }
 
 func readGoldenJSONValue(t *testing.T, goldenFile string) any {
