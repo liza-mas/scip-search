@@ -322,6 +322,33 @@ func TestRunProductionSymbolsCommandUsesDiscoveryImplementation(t *testing.T) {
 	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json")
 }
 
+func TestRunProductionSymbolsCommandAcceptsFlatOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Supervisor", "--flat"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols flat status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("symbols flat stdout JSON decode failed: %v; output = %q", err, stdout.String())
+	}
+	if _, ok := payload["symbols"].([]any); !ok {
+		t.Fatalf("symbols flat payload = %#v, want top-level symbols array", payload)
+	}
+	if _, ok := payload["packages"]; ok {
+		t.Fatalf("symbols flat payload = %#v, want no top-level packages field", payload)
+	}
+}
+
 func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
 	t.Parallel()
 

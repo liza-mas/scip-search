@@ -62,12 +62,25 @@ func TestSymbolsCommandGoldenJSON(t *testing.T) {
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("symbols JSON value = %#v, want golden %#v", got, want)
 			}
-			assertGoldenSymbolsPayload(t, got, test.wantSymbols)
+			assertGoldenCompactSymbolsPayload(t, got, test.wantSymbols)
 		})
 	}
 }
 
-func runSymbolsCommand(t *testing.T, name string) []byte {
+func TestSymbolsFlatCommandPreservesFlatPayload(t *testing.T) {
+	t.Parallel()
+
+	stdout := runSymbolsCommand(t, "Supervisor", "--flat")
+	got := decodeJSONValue(t, stdout)
+
+	assertGoldenFlatSymbolsPayload(t, got, []string{
+		discoverySupervisorAgentSymbol,
+		discoverySupervisorSymbol,
+		discoverySupervisorConfigSymbol,
+	})
+}
+
+func runSymbolsCommand(t *testing.T, name string, extraArgs ...string) []byte {
 	t.Helper()
 
 	fixture := loadDiscoveryFixture(t)
@@ -77,7 +90,9 @@ func runSymbolsCommand(t *testing.T, name string) []byte {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	status := runtime.Run([]string{"symbols", "--index", fixture.IndexPath, "--name", name}, &stdout, &stderr)
+	args := []string{"symbols", "--index", fixture.IndexPath, "--name", name}
+	args = append(args, extraArgs...)
+	status := runtime.Run(args, &stdout, &stderr)
 	if status != runtimecontract.StatusOK {
 		t.Fatalf("symbols command status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
@@ -98,27 +113,43 @@ func (symbolsCommandHandler) Handle(loadedIndex any, args []string) (any, error)
 	if !ok {
 		return nil, errors.New("symbols handler received non-SCIP loaded index")
 	}
-	name, err := parseSymbolNameArg(args)
+	name, flat, err := parseSymbolArgs(args)
 	if err != nil {
 		return nil, err
+	}
+	if flat {
+		return discovery.FlatSymbolsByName(traversal.NewView(loaded), name)
 	}
 
 	return discovery.SymbolsByName(traversal.NewView(loaded), name)
 }
 
-func parseSymbolNameArg(args []string) (string, error) {
+func parseSymbolArgs(args []string) (string, bool, error) {
+	name := ""
+	hasName := false
+	flat := false
 	for position := 0; position < len(args); position++ {
-		if args[position] != "--name" {
-			continue
-		}
-		if position+1 >= len(args) || args[position+1] == "" {
-			return "", errors.New("--name requires a value")
-		}
+		switch args[position] {
+		case "--flat":
+			flat = true
+		case "--name":
+			if position+1 >= len(args) || args[position+1] == "" {
+				return "", false, errors.New("--name requires a value")
+			}
+			name = args[position+1]
+			hasName = true
+			position++
+		default:
+			return "", false, errors.New("symbols only accepts --name and --flat")
 
-		return args[position+1], nil
+		}
 	}
 
-	return "", errors.New("missing --name")
+	if !hasName {
+		return "", false, errors.New("missing --name")
+	}
+
+	return name, flat, nil
 }
 
 func readGoldenJSONValue(t *testing.T, goldenFile string) any {
@@ -148,7 +179,39 @@ func decodeJSONValue(t *testing.T, payload []byte) any {
 	return decoded
 }
 
-func assertGoldenSymbolsPayload(t *testing.T, payload any, wantSymbols []string) {
+func assertGoldenCompactSymbolsPayload(t *testing.T, payload any, wantSymbols []string) {
+	t.Helper()
+
+	object, ok := payload.(map[string]any)
+	if !ok {
+		t.Fatalf("payload = %T, want top-level object", payload)
+	}
+	packagesValue, ok := object["packages"]
+	if !ok {
+		t.Fatalf("payload = %#v, want top-level packages collection", payload)
+	}
+	packages, ok := packagesValue.([]any)
+	if !ok {
+		t.Fatalf("packages = %T, want array", packagesValue)
+	}
+
+	gotSymbols := collectGoldenCompactSymbols(t, packages)
+	if !slices.Equal(gotSymbols, wantSymbols) {
+		t.Fatalf("symbols = %v, want %v", gotSymbols, wantSymbols)
+	}
+	if !slices.IsSorted(gotSymbols) {
+		t.Fatalf("symbols = %v, want stable ascending order by exact symbol", gotSymbols)
+	}
+	if len(wantSymbols) == 0 && len(packages) != 0 {
+		t.Fatalf("packages = %#v, want explicit empty collection", packages)
+	}
+
+	for _, entry := range packages {
+		assertRequiredCompactPackageFields(t, entry)
+	}
+}
+
+func assertGoldenFlatSymbolsPayload(t *testing.T, payload any, wantSymbols []string) {
 	t.Helper()
 
 	object, ok := payload.(map[string]any)
@@ -164,23 +227,49 @@ func assertGoldenSymbolsPayload(t *testing.T, payload any, wantSymbols []string)
 		t.Fatalf("symbols = %T, want array", symbolsValue)
 	}
 
-	gotSymbols := collectGoldenSymbols(t, symbols)
+	gotSymbols := collectGoldenFlatSymbols(t, symbols)
 	if !slices.Equal(gotSymbols, wantSymbols) {
 		t.Fatalf("symbols = %v, want %v", gotSymbols, wantSymbols)
 	}
-	if !slices.IsSorted(gotSymbols) {
-		t.Fatalf("symbols = %v, want stable ascending order by exact symbol", gotSymbols)
-	}
-	if len(wantSymbols) == 0 && len(symbols) != 0 {
-		t.Fatalf("symbols = %#v, want explicit empty collection", symbols)
-	}
-
 	for _, entry := range symbols {
-		assertRequiredSymbolFields(t, entry)
+		assertRequiredFlatSymbolFields(t, entry)
 	}
 }
 
-func collectGoldenSymbols(t *testing.T, symbols []any) []string {
+func collectGoldenCompactSymbols(t *testing.T, packages []any) []string {
+	t.Helper()
+
+	collected := make([]string, 0)
+	for _, entry := range packages {
+		object, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("package entry = %T, want object", entry)
+		}
+		packageKey, ok := object["packageKey"].(string)
+		if !ok || packageKey == "" {
+			t.Fatalf("package entry = %#v, want non-empty packageKey string", object)
+		}
+		symbols, ok := object["symbols"].([]any)
+		if !ok {
+			t.Fatalf("package entry = %#v, want symbols array", object)
+		}
+		for _, symbolEntry := range symbols {
+			symbolObject, ok := symbolEntry.(map[string]any)
+			if !ok {
+				t.Fatalf("symbol entry = %T, want object", symbolEntry)
+			}
+			descriptor, ok := symbolObject["descriptor"].(string)
+			if !ok || descriptor == "" {
+				t.Fatalf("symbol entry = %#v, want non-empty descriptor string", symbolObject)
+			}
+			collected = append(collected, packageKey+" "+descriptor)
+		}
+	}
+
+	return collected
+}
+
+func collectGoldenFlatSymbols(t *testing.T, symbols []any) []string {
 	t.Helper()
 
 	collected := make([]string, 0, len(symbols))
@@ -199,7 +288,49 @@ func collectGoldenSymbols(t *testing.T, symbols []any) []string {
 	return collected
 }
 
-func assertRequiredSymbolFields(t *testing.T, entry any) {
+func assertRequiredCompactPackageFields(t *testing.T, entry any) {
+	t.Helper()
+
+	object := entry.(map[string]any)
+	for _, field := range []string{
+		"scheme",
+		"packageManager",
+		"packageName",
+		"packageVersion",
+		"packageKey",
+	} {
+		value, ok := object[field].(string)
+		if !ok || value == "" {
+			t.Fatalf("package entry = %#v, want required non-empty string field %q", object, field)
+		}
+	}
+	symbols, ok := object["symbols"].([]any)
+	if !ok {
+		t.Fatalf("package entry = %#v, want symbols array", object)
+	}
+	for _, symbol := range symbols {
+		assertRequiredCompactSymbolFields(t, symbol)
+	}
+}
+
+func assertRequiredCompactSymbolFields(t *testing.T, entry any) {
+	t.Helper()
+
+	object := entry.(map[string]any)
+	for _, field := range []string{
+		"descriptor",
+		"matchText",
+		"matchSource",
+	} {
+		value, ok := object[field].(string)
+		if !ok || value == "" {
+			t.Fatalf("symbol entry = %#v, want required non-empty string field %q", object, field)
+		}
+	}
+	assertOptionalDefinition(t, object)
+}
+
+func assertRequiredFlatSymbolFields(t *testing.T, entry any) {
 	t.Helper()
 
 	object := entry.(map[string]any)
@@ -217,6 +348,12 @@ func assertRequiredSymbolFields(t *testing.T, entry any) {
 			t.Fatalf("symbol entry = %#v, want required non-empty string field %q", object, field)
 		}
 	}
+
+	assertOptionalDefinition(t, object)
+}
+
+func assertOptionalDefinition(t *testing.T, object map[string]any) {
+	t.Helper()
 
 	definition, hasDefinition := object["definition"]
 	if !hasDefinition {

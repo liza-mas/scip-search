@@ -1,55 +1,52 @@
 {
-  "symbols": [
+  "packages": [
     {
-      "symbol": "scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#",
       "scheme": "scip-go",
       "packageManager": "gomod",
       "packageName": "github.com/liza-mas/liza",
       "packageVersion": ".",
-      "matchText": "SupervisorAgent",
-      "matchSource": "displayName",
-      "definition": {
-        "documentPath": "supervisor/run.go",
-        "range": [
-          14,
-          5,
-          20
-        ]
-      }
-    },
-    {
-      "symbol": "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#",
-      "scheme": "scip-go",
-      "packageManager": "gomod",
-      "packageName": "github.com/liza-mas/liza",
-      "packageVersion": ".",
-      "matchText": "Supervisor",
-      "matchSource": "displayName",
-      "definition": {
-        "documentPath": "supervisor/supervisor.go",
-        "range": [
-          10,
-          5,
-          15
-        ]
-      }
-    },
-    {
-      "symbol": "scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#",
-      "scheme": "scip-go",
-      "packageManager": "gomod",
-      "packageName": "github.com/liza-mas/liza",
-      "packageVersion": ".",
-      "matchText": "supervisor/SupervisorConfig#",
-      "matchSource": "descriptor",
-      "definition": {
-        "documentPath": "supervisor/supervisor.go",
-        "range": [
-          18,
-          5,
-          21
-        ]
-      }
+      "packageKey": "scip-go gomod github.com/liza-mas/liza .",
+      "symbols": [
+        {
+          "descriptor": "agent/SupervisorAgent#",
+          "matchText": "SupervisorAgent",
+          "matchSource": "displayName",
+          "definition": {
+            "documentPath": "supervisor/run.go",
+            "range": [
+              14,
+              5,
+              20
+            ]
+          }
+        },
+        {
+          "descriptor": "supervisor/Supervisor#",
+          "matchText": "Supervisor",
+          "matchSource": "displayName",
+          "definition": {
+            "documentPath": "supervisor/supervisor.go",
+            "range": [
+              10,
+              5,
+              15
+            ]
+          }
+        },
+        {
+          "descriptor": "supervisor/SupervisorConfig#",
+          "matchText": "supervisor/SupervisorConfig#",
+          "matchSource": "descriptor",
+          "definition": {
+            "documentPath": "supervisor/supervisor.go",
+            "range": [
+              18,
+              5,
+              21
+            ]
+          }
+        }
+      ]
     }
   ]
 }

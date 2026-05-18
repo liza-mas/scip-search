@@ -25,9 +25,9 @@ const (
 func TestSymbolsByNameReturnsEverySupervisorMatchInStableSymbolOrder(t *testing.T) {
 	t.Parallel()
 
-	result, err := discovery.SymbolsByName(discoveryFixtureView(), "Supervisor")
+	result, err := discovery.FlatSymbolsByName(discoveryFixtureView(), "Supervisor")
 	if err != nil {
-		t.Fatalf("SymbolsByName() error = %v", err)
+		t.Fatalf("FlatSymbolsByName() error = %v", err)
 	}
 
 	gotSymbols := collectResultSymbols(result.Symbols)
@@ -84,9 +84,9 @@ func TestSymbolsByNameReturnsEverySupervisorMatchInStableSymbolOrder(t *testing.
 func TestSymbolsByNameReturnsOnlyRunMatches(t *testing.T) {
 	t.Parallel()
 
-	result, err := discovery.SymbolsByName(discoveryFixtureView(), "Run")
+	result, err := discovery.FlatSymbolsByName(discoveryFixtureView(), "Run")
 	if err != nil {
-		t.Fatalf("SymbolsByName() error = %v", err)
+		t.Fatalf("FlatSymbolsByName() error = %v", err)
 	}
 
 	if got, want := collectResultSymbols(result.Symbols), []string{runSymbol}; !slices.Equal(got, want) {
@@ -110,9 +110,9 @@ func TestSymbolsByNameReturnsOnlyRunMatches(t *testing.T) {
 func TestSymbolsByNameReturnsExplicitEmptyCollectionForMissingName(t *testing.T) {
 	t.Parallel()
 
-	result, err := discovery.SymbolsByName(discoveryFixtureView(), "DoesNotExist")
+	result, err := discovery.FlatSymbolsByName(discoveryFixtureView(), "DoesNotExist")
 	if err != nil {
-		t.Fatalf("SymbolsByName() error = %v", err)
+		t.Fatalf("FlatSymbolsByName() error = %v", err)
 	}
 	if result.Symbols == nil {
 		t.Fatal("Symbols = nil, want explicit empty collection")
@@ -133,9 +133,9 @@ func TestSymbolsByNameReturnsExplicitEmptyCollectionForMissingName(t *testing.T)
 func TestSymbolsByNameTreatsPatternCharactersLiterally(t *testing.T) {
 	t.Parallel()
 
-	result, err := discovery.SymbolsByName(discoveryFixtureView(), "[.*]")
+	result, err := discovery.FlatSymbolsByName(discoveryFixtureView(), "[.*]")
 	if err != nil {
-		t.Fatalf("SymbolsByName() error = %v", err)
+		t.Fatalf("FlatSymbolsByName() error = %v", err)
 	}
 
 	if got, want := collectResultSymbols(result.Symbols), []string{patternCharacterSymbol}; !slices.Equal(got, want) {
@@ -150,6 +150,73 @@ func TestSymbolsByNameTreatsPatternCharactersLiterally(t *testing.T) {
 		MatchText:      "patterns/Name[.*]().",
 		MatchSource:    discovery.MatchSourceDescriptor,
 	})
+}
+
+func TestSymbolsByNameGroupsMatchesByPackageWithDescriptors(t *testing.T) {
+	t.Parallel()
+
+	result, err := discovery.SymbolsByName(discoveryFixtureView(), "Supervisor")
+	if err != nil {
+		t.Fatalf("SymbolsByName() error = %v", err)
+	}
+
+	if result.Packages == nil {
+		t.Fatal("Packages = nil, want explicit collection")
+	}
+	if len(result.Packages) != 1 {
+		t.Fatalf("Packages = %+v, want one package group", result.Packages)
+	}
+
+	pkg := result.Packages[0]
+	if pkg.Scheme != "scip-go" ||
+		pkg.PackageManager != "gomod" ||
+		pkg.PackageName != "github.com/liza-mas/liza" ||
+		pkg.PackageVersion != "." ||
+		pkg.PackageKey != "scip-go gomod github.com/liza-mas/liza ." {
+		t.Fatalf("package = %+v, want liza package identity", pkg)
+	}
+
+	gotDescriptors := collectCompactDescriptors(pkg.Symbols)
+	wantDescriptors := []string{
+		"agent/SupervisorAgent#",
+		"supervisor/Supervisor#",
+		"supervisor/SupervisorConfig#",
+	}
+	if !slices.Equal(gotDescriptors, wantDescriptors) {
+		t.Fatalf("descriptors = %v, want %v", gotDescriptors, wantDescriptors)
+	}
+	if got := pkg.PackageKey + " " + pkg.Symbols[1].Descriptor; got != supervisorSymbol {
+		t.Fatalf("reconstructed symbol = %q, want %q", got, supervisorSymbol)
+	}
+	if pkg.Symbols[1].Definition == nil {
+		t.Fatal("definition = nil, want supervisor definition")
+	}
+	if pkg.Symbols[2].Definition != nil {
+		t.Fatalf("definition = %+v, want omitted for symbol without definition", pkg.Symbols[2].Definition)
+	}
+}
+
+func TestSymbolsByNameReturnsExplicitEmptyPackageCollectionForMissingName(t *testing.T) {
+	t.Parallel()
+
+	result, err := discovery.SymbolsByName(discoveryFixtureView(), "DoesNotExist")
+	if err != nil {
+		t.Fatalf("SymbolsByName() error = %v", err)
+	}
+	if result.Packages == nil {
+		t.Fatal("Packages = nil, want explicit empty collection")
+	}
+	if len(result.Packages) != 0 {
+		t.Fatalf("Packages = %+v, want empty collection", result.Packages)
+	}
+
+	payload, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal(SymbolPackagesPayload) error = %v", err)
+	}
+	if got, want := string(payload), `{"packages":[]}`; got != want {
+		t.Fatalf("JSON payload = %s, want %s", got, want)
+	}
 }
 
 func discoveryFixtureView() traversal.View {
@@ -196,6 +263,14 @@ func collectResultSymbols(symbols []discovery.SymbolResult) []string {
 	collected := make([]string, 0, len(symbols))
 	for _, symbol := range symbols {
 		collected = append(collected, symbol.Symbol)
+	}
+	return collected
+}
+
+func collectCompactDescriptors(symbols []discovery.CompactSymbolResult) []string {
+	collected := make([]string, 0, len(symbols))
+	for _, symbol := range symbols {
+		collected = append(collected, symbol.Descriptor)
 	}
 	return collected
 }

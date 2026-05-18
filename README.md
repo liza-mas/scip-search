@@ -30,8 +30,8 @@ As the indexers produce Protobuf files, it is possible for multiple indexes to c
 
 Generate a Go SCIP index:
 ```bash
-scip-go -o /path/to/go.scip
-scip-go --module-root /path/to/repo -o /path/to/go.scip
+scip-go index --output /path/to/go.scip
+scip-go index --module-root /path/to/repo --output /path/to/go.scip
 ```
 
 ### SCIP Symbol Format
@@ -44,12 +44,12 @@ SCIP uses human-readable string identifiers for symbols. The format is:
 
 Example Go symbols:
 ```
-scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#
-scip-go gomod github.com/liza-mas/liza . supervisor/Run().
-scip-go gomod github.com/liza-mas/liza . agent/Doer#
+scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSource#
+scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSourceDocument.
+scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#
 ```
 
-`scip-search` resolves partial name queries (e.g. `--name Supervisor`) to full SCIP symbols and returns them alongside results, so agents can use the full symbol string in subsequent `references` or `implementations` calls.
+`scip-search` resolves partial name queries (e.g. `--name SymbolSource`) to full SCIP symbols. The default `symbols` response groups matching descriptors by package to reduce repeated package identity text. A full SCIP symbol can be reconstructed as `<packageKey> <descriptor>` and used in subsequent `references` or `implementations` calls. The package version comes from the indexed checkout and varies by commit.
 
 ---
 
@@ -67,7 +67,7 @@ Cold start is milliseconds — loads a pre-built binary index, performs no compi
 ```bash
 scip-search --help
 scip-search --version
-scip-search symbols --index <index-path> --name <name>
+scip-search symbols --index <index-path> --name <name> [--flat]
 scip-search references --index <index-path> --symbol <scip-symbol>
 scip-search implementations --index <index-path> --symbol <scip-symbol>
 scip-search packages --index <index-path> [--prefix <prefix>]
@@ -75,9 +75,10 @@ scip-search packages --index <index-path> [--prefix <prefix>]
 
 Examples:
 ```bash
-scip-search symbols --index /path/to/go.scip --name Supervisor
-scip-search references --index /path/to/go.scip --symbol 'scip-go gomod github.com/liza-mas/liza . supervisor/Run().'
-scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod github.com/liza-mas/liza . agent/Doer#'
+scip-search symbols --index /path/to/go.scip --name SymbolSource
+scip-search symbols --index /path/to/go.scip --name SymbolSource --flat
+scip-search references --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSource#'
+scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#'
 scip-search packages --index /path/to/go.scip
 ```
 
@@ -88,6 +89,8 @@ All query commands require `--index <index-path>`.
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
 When a query command succeeds, `scip-search` writes exactly one JSON value to stdout, writes nothing to stderr, and exits with status `0`.
+
+By default, `symbols --name` returns a compact package-grouped payload. Use `--flat` to return one self-contained entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result.
 
 Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
 
@@ -131,9 +134,9 @@ Handles multiple languages natively by file extension — no per-language invoca
 
 | Question | Tool |
 |---|---|
-| Where is `Supervisor` defined? | `scip-search symbols` |
-| What implements `Doer`? | `scip-search implementations` |
-| What calls `blackboard.Write`? | `scip-search references` |
+| Where is `SymbolSource` defined? | `scip-search symbols` |
+| What implements `Handler`? | `scip-search implementations` |
+| What references `SymbolSource`? | `scip-search references` |
 | What packages exist? | `scip-search packages` |
 | Find all functions returning unwrapped errors | `ast-grep` |
 | Find all struct literals missing field `Timeout` | `ast-grep` |

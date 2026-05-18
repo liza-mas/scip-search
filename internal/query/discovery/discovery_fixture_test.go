@@ -165,9 +165,9 @@ func loadDiscoveryFixture(t testing.TB) traversaltest.Fixture {
 func collectFixtureResultSymbols(t *testing.T, fixture traversaltest.Fixture, name string) []string {
 	t.Helper()
 
-	payload, err := discovery.SymbolsByName(fixture.View, name)
+	payload, err := discovery.FlatSymbolsByName(fixture.View, name)
 	if err != nil {
-		t.Fatalf("SymbolsByName(%q) error = %v", name, err)
+		t.Fatalf("FlatSymbolsByName(%q) error = %v", name, err)
 	}
 	symbols := make([]string, 0, len(payload.Symbols))
 	for _, symbol := range payload.Symbols {

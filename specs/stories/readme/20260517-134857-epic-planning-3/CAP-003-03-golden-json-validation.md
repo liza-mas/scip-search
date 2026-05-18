@@ -41,7 +41,7 @@ Applies to: successful golden JSON validation for symbol and package discovery q
 - Component C-004 - Calling process environment: The shell, script, or agent that parses successful JSON stdout under the shared runtime contract.
 
 ### Interfaces
-- I-001-001 - Symbol discovery query contract (Interface 001 of Component C-001): The `symbols --name` query returns a successful JSON payload with a `symbols` collection.
+- I-001-001 - Symbol discovery query contract (Interface 001 of Component C-001): The default `symbols --name` query returns a compact successful JSON payload with a `packages` collection and nested symbol descriptors; `symbols --name --flat` returns a compatibility `symbols` collection.
 - I-001-002 - Package discovery query contract (Interface 002 of Component C-001): The `packages` query returns a successful JSON payload with a `packages` collection.
 - I-004-001 - CLI process contract (Interface 001 of Component C-004): The shared successful runtime contract that provides parseable JSON on stdout.
 
@@ -68,13 +68,13 @@ Applies to: successful golden JSON validation for symbol and package discovery q
 - consistency check: `specs/stories/readme/20260517-134857-epic-planning-3/cap-001-symbol-name-discovery.md` - Defines symbol payload fields and matching semantics.
 
 ### User Story
-**As a** CLI Maintainer, **I want to** validate `symbols --name` successful responses against golden JSON, **so that** exact full symbols, match context, ambiguous results, empty results, and result ordering stay stable.
+**As a** CLI Maintainer, **I want to** validate `symbols --name` successful responses against golden JSON, **so that** compact package grouping, exact full-symbol reconstruction, match context, ambiguous results, empty results, and result ordering stay stable.
 
 ### Acceptance Criteria
-- AC-001-1: Given the symbol fixture golden case for `symbols --name Supervisor`, when maintainers run golden validation, then the expected JSON contains a top-level `symbols` collection with every ambiguous matching symbol entry and no package-only or unrelated symbol entries.
-- AC-001-2: Given the symbol fixture golden case for a partial substring query such as `symbols --name Run`, when maintainers run golden validation, then the expected JSON proves partial literal matching and exact full SCIP symbol preservation.
-- AC-001-3: Given the symbol fixture golden case for `symbols --name DoesNotExist`, when maintainers run golden validation, then the expected JSON contains an explicit empty `symbols` collection.
-- AC-001-4: Given any symbol golden case with multiple results, when maintainers compare the expected JSON, then array order is asserted as stable ascending order by observable full `symbol` value.
+- AC-001-1: Given the symbol fixture golden case for `symbols --name Supervisor`, when maintainers run golden validation, then the expected JSON contains a top-level `packages` collection with every ambiguous matching symbol descriptor nested under its package identity and no package-only or unrelated symbol entries.
+- AC-001-2: Given the symbol fixture golden case for a partial substring query such as `symbols --name Run`, when maintainers run golden validation, then the expected JSON proves partial literal matching and exact full SCIP symbol reconstruction from `packageKey + " " + descriptor`.
+- AC-001-3: Given the symbol fixture golden case for `symbols --name DoesNotExist`, when maintainers run golden validation, then the expected JSON contains an explicit empty `packages` collection.
+- AC-001-4: Given any symbol golden case with multiple results, when maintainers compare the expected JSON, then array order is asserted as stable ascending order by observable package key and reconstructed full symbol value.
 - AC-001-5: Given symbol golden validation runs, when maintainers inspect the expected JSON cases, then they assert only successful query-specific `symbols` payload behavior and do not assert shared runtime failure payloads, stderr text, reference results, implementation results, or package query payloads.
 
 ### Depends on:
@@ -91,7 +91,7 @@ Run time coupling:
 - Object field order as a semantic assertion.
 
 ### Assumptions
-- **ASM-001-1**: Symbol golden JSON cases use the same `symbols` collection shape for non-empty and empty successful results. - *Why*: CAP-001 and the parent epic require explicit empty collections for no-match discovery. - Confidence: HIGH
+- **ASM-001-1**: Default symbol golden JSON cases use the same `packages` collection shape for non-empty and empty successful results. - *Why*: CAP-001 and the parent epic require explicit empty collections for no-match discovery, and the compact default groups symbols under packages. - Confidence: HIGH
 
 ### Open Questions
 - None.

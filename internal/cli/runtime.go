@@ -20,7 +20,7 @@ var documentedCommands = []string{
 const helpText = `Usage:
   scip-search --help
   scip-search --version
-  scip-search symbols --index <index-path> --name <name>
+  scip-search symbols --index <index-path> --name <name> [--flat]
   scip-search references --index <index-path> --symbol <scip-symbol>
   scip-search implementations --index <index-path> --symbol <scip-symbol>
   scip-search packages --index <index-path> [--prefix <prefix>]

@@ -46,9 +46,12 @@ func (symbolsHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !ok {
 		return nil, errors.New("symbols handler received non-SCIP loaded index")
 	}
-	name, err := parseSymbolNameArg(args)
+	name, flat, err := parseSymbolArgs(args)
 	if err != nil {
 		return nil, err
+	}
+	if flat {
+		return discovery.FlatSymbolsByName(traversal.NewView(loaded), name)
 	}
 
 	return discovery.SymbolsByName(traversal.NewView(loaded), name)
@@ -99,8 +102,39 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	return references.Query(traversal.NewView(loaded), symbol), nil
 }
 
-func parseSymbolNameArg(args []string) (string, error) {
-	return parseRequiredQueryValue(args, "--name")
+func parseSymbolArgs(args []string) (string, bool, error) {
+	if duplicateFlag(args, "--name") {
+		return "", false, errors.New("--name can only be provided once")
+	}
+	if duplicateFlag(args, "--flat") {
+		return "", false, errors.New("--flat can only be provided once")
+	}
+
+	var name string
+	hasName := false
+	flat := false
+	for position := 0; position < len(args); position++ {
+		arg := args[position]
+		switch arg {
+		case "--name":
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return "", false, errors.New("--name requires a value")
+			}
+			name = args[position+1]
+			hasName = true
+			position++
+		case "--flat":
+			flat = true
+		default:
+			return "", false, errors.New("symbols only accepts --name and --flat")
+		}
+	}
+
+	if !hasName {
+		return "", false, errors.New("missing --name")
+	}
+
+	return name, flat, nil
 }
 
 func parseExactSymbolArg(args []string) (string, error) {

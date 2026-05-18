@@ -1,21 +1,26 @@
 {
-  "symbols": [
+  "packages": [
     {
-      "symbol": "scip-go gomod github.com/liza-mas/liza . supervisor/Run().",
       "scheme": "scip-go",
       "packageManager": "gomod",
       "packageName": "github.com/liza-mas/liza",
       "packageVersion": ".",
-      "matchText": "Run",
-      "matchSource": "displayName",
-      "definition": {
-        "documentPath": "supervisor/run.go",
-        "range": [
-          6,
-          5,
-          8
-        ]
-      }
+      "packageKey": "scip-go gomod github.com/liza-mas/liza .",
+      "symbols": [
+        {
+          "descriptor": "supervisor/Run().",
+          "matchText": "Run",
+          "matchSource": "displayName",
+          "definition": {
+            "documentPath": "supervisor/run.go",
+            "range": [
+              6,
+              5,
+              8
+            ]
+          }
+        }
+      ]
     }
   ]
 }
