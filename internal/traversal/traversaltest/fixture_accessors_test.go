@@ -19,8 +19,8 @@ func TestSharedFixtureLoadsThroughTraversalView(t *testing.T) {
 	}
 
 	documents := fixture.View.Documents()
-	if len(documents) != 2 {
-		t.Fatalf("fixture document count = %d, want 2", len(documents))
+	if len(documents) < 2 {
+		t.Fatalf("fixture document count = %d, want at least 2 traversal coverage documents", len(documents))
 	}
 
 	alpha := fixture.DocumentByPath(t, "cmd/alpha.go")

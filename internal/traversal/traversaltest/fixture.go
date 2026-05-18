@@ -29,8 +29,10 @@ const (
 var sharedFixtureBase64 string
 
 type Fixture struct {
+	IndexPath   string
 	LoadedIndex runtimecontract.LoadedIndex
 	View        traversal.View
+	SizeBytes   int
 }
 
 func LoadSharedFixture(t testing.TB) Fixture {
@@ -52,8 +54,10 @@ func LoadSharedFixture(t testing.TB) Fixture {
 	}
 
 	return Fixture{
+		IndexPath:   indexPath,
 		LoadedIndex: loaded,
 		View:        traversal.NewView(loaded),
+		SizeBytes:   len(payload),
 	}
 }
 

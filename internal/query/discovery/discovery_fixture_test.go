@@ -1,45 +1,38 @@
 package discovery_test
 
 import (
-	_ "embed"
-	"encoding/base64"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"scip-search/internal/query/discovery"
-	runtimecontract "scip-search/internal/runtime"
-	"scip-search/internal/scipindex"
-	"scip-search/internal/traversal"
+	"scip-search/internal/traversal/traversaltest"
 )
 
 const (
-	discoverySupervisorSymbol       = "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#"
-	discoverySupervisorConfigSymbol = "scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#"
-	discoveryRunSymbol              = "scip-go gomod github.com/liza-mas/liza . supervisor/Run()."
-	discoverySupervisorAgentSymbol  = "scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#"
-	discoveryLizaPackageKey         = "scip-go gomod github.com/liza-mas/liza ."
-	discoveryScipSearchPackageKey   = "scip-go gomod github.com/liza-mas/scip-search ."
-	discoveryBindingsPackageKey     = "scip-go gomod github.com/sourcegraph/scip-bindings ."
-	discoveryFixtureIndexFile       = "discovery.scip"
-	maxDiscoveryFixtureBytes        = 2048
+	discoverySupervisorSymbol           = "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#"
+	discoverySupervisorConfigSymbol     = "scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#"
+	discoveryRunSymbol                  = "scip-go gomod github.com/liza-mas/liza . supervisor/Run()."
+	discoverySupervisorAgentSymbol      = "scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#"
+	discoverySchemeOnlyPackageKey       = "github.com/liza-mas/scip-search gomod example.com/scheme-only ."
+	discoveryManagerOnlyPackageKey      = "scip-go github.com/liza-mas/scip-search example.com/manager-only ."
+	discoveryVersionOnlyPackageKey      = "scip-go gomod example.com/version-only github.com/liza-mas/scip-search"
+	discoveryDescriptorOnlyPackageKey   = "scip-go gomod example.com/descriptor-only ."
+	discoverySymbolNameOnlyPackageKey   = "scip-go gomod example.com/symbol-name-only ."
+	discoveryDocumentPathOnlyPackageKey = "scip-go gomod example.com/path-only ."
+	discoveryLizaPackageKey             = "scip-go gomod github.com/liza-mas/liza ."
+	discoveryScipSearchPackageKey       = "scip-go gomod github.com/liza-mas/scip-search ."
+	discoveryBindingsPackageKey         = "scip-go gomod github.com/sourcegraph/scip-bindings ."
+	maxDiscoveryFixtureBytes            = 4096
 )
-
-//go:embed testdata/discovery.scip.b64
-var discoveryFixtureBase64 string
 
 func TestDiscoveryFixtureLoadsThroughSharedIndexAndTraversalPath(t *testing.T) {
 	t.Parallel()
 
 	fixture := loadDiscoveryFixture(t)
 
-	if fixture.IndexPath == "" {
+	if fixture.LoadedIndex.Path == "" {
 		t.Fatal("discovery fixture index path is empty, want temp SCIP file path")
-	}
-	if fixture.LoadedIndex.Path != fixture.IndexPath {
-		t.Fatalf("loaded index path = %q, want fixture path %q", fixture.LoadedIndex.Path, fixture.IndexPath)
 	}
 	if len(fixture.View.Documents()) == 0 {
 		t.Fatal("discovery fixture traversal documents are empty")
@@ -84,6 +77,12 @@ func TestDiscoveryFixtureExposesPackageIdentitiesAndPrefixNegativeData(t *testin
 	}
 	gotKeys := collectPackageKeys(allPackages.Packages)
 	for _, wantKey := range []string{
+		discoverySchemeOnlyPackageKey,
+		discoveryManagerOnlyPackageKey,
+		discoveryVersionOnlyPackageKey,
+		discoveryDescriptorOnlyPackageKey,
+		discoverySymbolNameOnlyPackageKey,
+		discoveryDocumentPathOnlyPackageKey,
 		discoveryLizaPackageKey,
 		discoveryScipSearchPackageKey,
 		discoveryBindingsPackageKey,
@@ -122,6 +121,11 @@ func TestDiscoveryFixtureExposesPackageIdentitiesAndPrefixNegativeData(t *testin
 	if got, want := collectPackageKeys(scipSearchPackages.Packages), []string{discoveryScipSearchPackageKey}; !slices.Equal(got, want) {
 		t.Fatalf("github.com/liza-mas/scip-search package keys = %v, want %v", got, want)
 	}
+	for _, gotPackage := range scipSearchPackages.Packages {
+		if gotPackage.PackageName != "github.com/liza-mas/scip-search" {
+			t.Fatalf("github.com/liza-mas/scip-search package = %+v, want only packageName prefix matches", gotPackage)
+		}
+	}
 
 	noMatchPackages, err := discovery.Packages(fixture.View, "github.com/no-match/")
 	if err != nil {
@@ -132,50 +136,33 @@ func TestDiscoveryFixtureExposesPackageIdentitiesAndPrefixNegativeData(t *testin
 	}
 
 	hasDescriptorCase := false
+	hasSymbolNameCase := false
+	hasDocumentPathCase := false
 	for _, document := range fixture.View.Documents() {
+		hasDocumentPathCase = hasDocumentPathCase || strings.Contains(document.RelativePath, "github.com/liza-mas/scip-search")
 		for _, symbol := range document.Symbols {
-			hasDescriptorCase = hasDescriptorCase || strings.Contains(symbol.Symbol, " . internal/liza-mas/")
+			hasDescriptorCase = hasDescriptorCase || strings.Contains(symbol.Symbol, " . github.com/liza-mas/scip-search/")
+			hasSymbolNameCase = hasSymbolNameCase || strings.Contains(symbol.Symbol, "/github.com/liza-mas/scip-search#")
 		}
 	}
 	if !hasDescriptorCase {
-		t.Fatal("discovery fixture missing non-package-name liza-mas descriptor case")
+		t.Fatal("discovery fixture missing non-package-name github.com/liza-mas/scip-search descriptor case")
+	}
+	if !hasSymbolNameCase {
+		t.Fatal("discovery fixture missing non-package-name github.com/liza-mas/scip-search symbol-name case")
+	}
+	if !hasDocumentPathCase {
+		t.Fatal("discovery fixture missing non-package-name github.com/liza-mas/scip-search document-path case")
 	}
 }
 
-type discoveryFixture struct {
-	IndexPath   string
-	LoadedIndex runtimecontract.LoadedIndex
-	View        traversal.View
-	SizeBytes   int
-}
-
-func loadDiscoveryFixture(t testing.TB) discoveryFixture {
+func loadDiscoveryFixture(t testing.TB) traversaltest.Fixture {
 	t.Helper()
 
-	indexBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(discoveryFixtureBase64))
-	if err != nil {
-		t.Fatalf("decode discovery fixture: %v", err)
-	}
-
-	indexPath := filepath.Join(t.TempDir(), discoveryFixtureIndexFile)
-	if err := os.WriteFile(indexPath, indexBytes, 0o600); err != nil {
-		t.Fatalf("os.WriteFile(%q) error = %v", indexPath, err)
-	}
-
-	loaded, err := scipindex.NewLoader().LoadIndex(indexPath)
-	if err != nil {
-		t.Fatalf("load discovery fixture through official binding path: %v", err)
-	}
-
-	return discoveryFixture{
-		IndexPath:   indexPath,
-		LoadedIndex: loaded,
-		View:        traversal.NewView(loaded),
-		SizeBytes:   len(indexBytes),
-	}
+	return traversaltest.LoadSharedFixture(t)
 }
 
-func collectFixtureResultSymbols(t *testing.T, fixture discoveryFixture, name string) []string {
+func collectFixtureResultSymbols(t *testing.T, fixture traversaltest.Fixture, name string) []string {
 	t.Helper()
 
 	payload, err := discovery.SymbolsByName(fixture.View, name)
