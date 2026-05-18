@@ -140,36 +140,45 @@ Handles multiple languages natively by file extension — no per-language invoca
 
 ### Prerequisites
 
-Install the appropriate language indexers listed in [Existing Indexers](#existing-indexers) before generating SCIP indexes for `scip-search`.
+Installing `scip-search` only installs the `scip-search` CLI.
+
+Language indexers are separate tools used to generate SCIP indexes before
+running query commands. Install the appropriate indexers listed in
+[Existing Indexers](#existing-indexers) when you need to create SCIP data; they
+are not installed by the `scip-search` installer.
 
 **Quick install (latest release, macOS/Linux):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | bash
+scip-search --version
 ```
 
 **Options:**
 
 ```bash
-# Specific version
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | VERSION=v1.0.0 bash
+# Explicit release
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | VERSION=<release> bash
+scip-search --version
 
-# Build from a branch (requires Go and make)
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | BRANCH=main bash
+# Build from a branch with caller-provided Go and make
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | BRANCH=<branch> bash
+scip-search --version
 
-# Custom directory
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | INSTALL_DIR=~/.local/bin bash
+# Custom install directory
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | INSTALL_DIR=<directory> bash
+<directory>/scip-search --version
 ```
 
 **From a local clone:**
 
 ```bash
-git clone https://github.com/liza-mas/scip-search.git && cd scip-search
+git clone https://github.com/liza-mas/scip-search.git
+cd scip-search
 make install
-```
-
-**Verify:**
-
-```bash
 scip-search --version
 ```
+
+Local clone installs also require caller-provided Go and make. Use
+`INSTALL_DIR=<directory> make install` to install from a local clone into a
+custom directory, then verify with `<directory>/scip-search --version`.
