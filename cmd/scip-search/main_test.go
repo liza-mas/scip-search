@@ -310,6 +310,42 @@ func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
 	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
 }
 
+func TestRunProductionImplementationsCommandUsesImplementationQuery(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.ImplSymbol}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json")
+}
+
+func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations empty status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-alpha.json")
+}
+
 func TestRunProductionSymbolsMissingNameRemainsUsageFailure(t *testing.T) {
 	t.Parallel()
 
@@ -380,29 +416,68 @@ func TestRunProductionPackagesInvalidFlagsRemainUsageFailures(t *testing.T) {
 	}
 }
 
-func TestRunProductionReferenceCommandsRemainUnimplemented(t *testing.T) {
+func TestRunProductionImplementationsMissingSymbolRemainsUsageFailure(t *testing.T) {
 	t.Parallel()
 
-	for _, command := range []string{"references", "implementations"} {
-		t.Run(command, func(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "missing symbol",
+			args: nil,
+			want: "missing --symbol",
+		},
+		{
+			name: "empty symbol",
+			args: []string{"--symbol", ""},
+			want: "--symbol requires a value",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
 			fixture := traversaltest.LoadSharedFixture(t)
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
+			args := []string{"implementations", "--index", fixture.IndexPath}
+			args = append(args, test.args...)
 
-			status := run(documentedCommandArgs(command, fixture.IndexPath), &stdout, &stderr)
+			status := run(args, &stdout, &stderr)
 
 			if status != runtimecontract.StatusUsage {
-				t.Fatalf("%s status = %d, want %d", command, status, runtimecontract.StatusUsage)
+				t.Fatalf("implementations invalid args status = %d, want %d", status, runtimecontract.StatusUsage)
 			}
 			if stdout.String() != "" {
 				t.Fatalf("stdout = %q, want empty", stdout.String())
 			}
-			if !strings.Contains(stderr.String(), "query execution is not implemented") {
-				t.Fatalf("stderr = %q, want unimplemented diagnostic", stderr.String())
+			if !strings.Contains(stderr.String(), test.want) {
+				t.Fatalf("stderr = %q, want diagnostic containing %q", stderr.String(), test.want)
 			}
 		})
+	}
+}
+
+func TestRunProductionReferenceCommandRemainsUnimplemented(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run(documentedCommandArgs("references", fixture.IndexPath), &stdout, &stderr)
+
+	if status != runtimecontract.StatusUsage {
+		t.Fatalf("references status = %d, want %d", status, runtimecontract.StatusUsage)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "query execution is not implemented") {
+		t.Fatalf("stderr = %q, want unimplemented diagnostic", stderr.String())
 	}
 }
 
@@ -569,6 +644,27 @@ func readDiscoveryGoldenJSONValue(t *testing.T, goldenFile string) any {
 	payload, err := os.ReadFile(filepath.Join("..", "..", "internal", "query", "discovery", "testdata", "golden", goldenFile))
 	if err != nil {
 		t.Fatalf("read discovery golden file %q: %v", goldenFile, err)
+	}
+
+	return decodeJSONValue(t, payload)
+}
+
+func assertProductionImplementationsJSONMatchesGolden(t *testing.T, output []byte, goldenFile string) {
+	t.Helper()
+
+	got := decodeJSONValue(t, output)
+	want := readImplementationsGoldenJSONValue(t, goldenFile)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("production implementations JSON value = %#v, want golden %#v", got, want)
+	}
+}
+
+func readImplementationsGoldenJSONValue(t *testing.T, goldenFile string) any {
+	t.Helper()
+
+	payload, err := os.ReadFile(filepath.Join("..", "..", "internal", "query", "implementations", "testdata", "golden", goldenFile))
+	if err != nil {
+		t.Fatalf("read implementations golden file %q: %v", goldenFile, err)
 	}
 
 	return decodeJSONValue(t, payload)

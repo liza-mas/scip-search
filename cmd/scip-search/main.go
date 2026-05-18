@@ -7,6 +7,7 @@ import (
 
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
+	"scip-search/internal/query/implementations"
 	runtimecontract "scip-search/internal/runtime"
 	"scip-search/internal/traversal"
 	"scip-search/internal/version"
@@ -29,7 +30,7 @@ func runWithBuildIdentity(
 	cliRuntime := cli.NewProductionRuntimeWithBuildIdentity(map[string]cli.Handler{
 		"symbols":         symbolsHandler{},
 		"references":      unimplementedHandler{},
-		"implementations": unimplementedHandler{},
+		"implementations": implementationsHandler{},
 		"packages":        packagesHandler{},
 	}, buildIdentity)
 
@@ -66,6 +67,21 @@ func (packagesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	return discovery.Packages(traversal.NewView(loaded), prefix)
 }
 
+type implementationsHandler struct{}
+
+func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error) {
+	loaded, ok := loadedIndex.(runtimecontract.LoadedIndex)
+	if !ok {
+		return nil, errors.New("implementations handler received non-SCIP loaded index")
+	}
+	symbol, err := parseExactSymbolArg(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return implementations.Implementations(traversal.NewView(loaded), symbol)
+}
+
 type unimplementedHandler struct{}
 
 func (unimplementedHandler) Handle(_ any, _ []string) (any, error) {
@@ -85,6 +101,21 @@ func parseSymbolNameArg(args []string) (string, error) {
 	}
 
 	return "", errors.New("missing --name")
+}
+
+func parseExactSymbolArg(args []string) (string, error) {
+	for position := 0; position < len(args); position++ {
+		if args[position] != "--symbol" {
+			continue
+		}
+		if position+1 >= len(args) || args[position+1] == "" {
+			return "", errors.New("--symbol requires a value")
+		}
+
+		return args[position+1], nil
+	}
+
+	return "", errors.New("missing --symbol")
 }
 
 func parsePackagePrefixArg(args []string) (string, error) {
