@@ -62,6 +62,7 @@ func TestSourceBranchInstallEndToEndMissingGoFailsBeforeProvisioning(t *testing.
 	})
 
 	result.requireFailure(t)
+	result.requireNoSourceInstallSuccessClaim(t, harness.installedPath())
 	result.requireDiagnostic(t, "Go is required")
 	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
 	harness.requireNoInstalledBinary(t)
@@ -82,6 +83,7 @@ func TestSourceBranchInstallEndToEndMissingMakeFailsBeforeProvisioning(t *testin
 	})
 
 	result.requireFailure(t)
+	result.requireNoSourceInstallSuccessClaim(t, harness.installedPath())
 	result.requireDiagnostic(t, "make is required")
 	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
 	harness.requireNoInstalledBinary(t)
@@ -103,8 +105,10 @@ func TestSourceBranchInstallEndToEndBuildFailureDoesNotFallback(t *testing.T) {
 	})
 
 	result.requireFailure(t)
+	result.requireNoSourceInstallSuccessClaim(t, harness.installedPath())
 	result.requireDiagnostic(t, "source install failed")
 	result.requireDiagnostic(t, "BRANCH="+branch)
+	result.requireDiagnostic(t, "controlled source build failure")
 	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
 	harness.requireNoInstalledBinary(t)
 	harness.requireNoReleaseFallback(t)
@@ -129,8 +133,10 @@ func TestSourceBranchInstallEndToEndInstallFailureDoesNotFallback(t *testing.T) 
 	})
 
 	result.requireFailure(t)
+	result.requireNoSourceInstallSuccessClaim(t, harness.installedPath())
 	result.requireDiagnostic(t, "source install failed")
 	result.requireDiagnostic(t, "BRANCH="+branch)
+	result.requireDiagnostic(t, "INSTALL_DIR is not usable: "+unusableInstallDir)
 	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
 	harness.requireNoInstalledBinary(t)
 	harness.requireNoReleaseFallback(t)
@@ -391,6 +397,23 @@ func (r installerResult) requireSourceBranchSuccessOutput(t *testing.T, installe
 	}
 	if strings.Contains(r.stdout, "release") {
 		t.Fatalf("success output claimed release provenance:\n%s", r.stdout)
+	}
+}
+
+func (r installerResult) requireNoSourceInstallSuccessClaim(t *testing.T, installedPath string) {
+	t.Helper()
+
+	combined := r.stdout + r.stderr
+	for _, forbidden := range []string{
+		"Installed scip-search",
+		"source branch=",
+		"source ref=",
+		"scip-search release",
+		" to " + installedPath,
+	} {
+		if strings.Contains(combined, forbidden) {
+			t.Fatalf("failure output claimed source install success with %q\nstdout:\n%s\nstderr:\n%s", forbidden, r.stdout, r.stderr)
+		}
 	}
 }
 
