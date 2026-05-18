@@ -9,10 +9,13 @@ VERSION_LDFLAGS := \
 	-X 'scip-search/internal/version.SourceRef=$(SOURCE_REF)' \
 	-X 'scip-search/internal/version.SourceRevision=$(SOURCE_REVISION)'
 
-.PHONY: build check-testhelpers install sync-embedded test
+.PHONY: build check-testhelpers install sync-embedded test validate-distribution
 
 test:
 	go test ./...
+
+validate-distribution:
+	@GO="$(GO)" ./scripts/validate-distribution.sh
 
 build:
 	@command -v "$(GO)" >/dev/null 2>&1 || { printf 'Go is required for source builds: %s\n' "$(GO)" >&2; exit 1; }
