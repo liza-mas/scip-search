@@ -321,6 +321,117 @@ func TestNewViewExposesEverySymbolAndOccurrenceInventoryFact(t *testing.T) {
 	}
 }
 
+func TestOccurrencesForSymbolReturnsExactCrossDocumentMatchesWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	target := "scip-go gomod example.com/project . shared/Target()."
+	other := "scip-go gomod example.com/project . shared/TargetExtra()."
+	view := NewView(runtimecontract.LoadedIndex{
+		Index: &scip.Index{
+			Documents: []*scip.Document{
+				{
+					RelativePath:     "pkg/first.go",
+					Language:         "go",
+					PositionEncoding: scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart,
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:                 []int32{2, 4, 10},
+							EnclosingRange:        []int32{1, 0, 5, 1},
+							Symbol:                target,
+							SymbolRoles:           int32(scip.SymbolRole_Definition | scip.SymbolRole_ReadAccess),
+							OverrideDocumentation: []string{"first occurrence docs"},
+						},
+						{
+							Range:       []int32{8, 1, 9},
+							Symbol:      other,
+							SymbolRoles: int32(scip.SymbolRole_ReadAccess),
+						},
+					},
+				},
+				{
+					RelativePath:     "pkg/second.go",
+					Language:         "go",
+					PositionEncoding: scip.PositionEncoding_UTF16CodeUnitOffsetFromLineStart,
+					Occurrences: []*scip.Occurrence{
+						{
+							Range:                 []int32{12, 3, 14, 8},
+							Symbol:                target,
+							SymbolRoles:           int32(scip.SymbolRole_WriteAccess | scip.SymbolRole_Generated | scip.SymbolRole_Test),
+							OverrideDocumentation: []string{"second occurrence docs"},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	matches := view.OccurrencesForSymbol(target)
+	if len(matches) != 2 {
+		t.Fatalf("target occurrence count = %d, want both cross-document matches", len(matches))
+	}
+
+	first := matches[0]
+	if first.DocumentPath != "pkg/first.go" ||
+		first.DocumentLanguage != "go" ||
+		first.PositionEncoding != scip.PositionEncoding_UTF8CodeUnitOffsetFromLineStart ||
+		first.Symbol != target {
+		t.Fatalf("first occurrence context = %+v, want exact containing document and symbol", first)
+	}
+	if !slices.Equal(first.Range, []int32{2, 4, 10}) {
+		t.Fatalf("first occurrence range = %v, want exact SCIP range", first.Range)
+	}
+	if !first.HasEnclosingRange || !slices.Equal(first.EnclosingRange, []int32{1, 0, 5, 1}) {
+		t.Fatalf("first enclosing range = present:%v value:%v, want exact SCIP enclosing range", first.HasEnclosingRange, first.EnclosingRange)
+	}
+	wantFirstRoles := int32(scip.SymbolRole_Definition | scip.SymbolRole_ReadAccess)
+	if first.SymbolRoles != wantFirstRoles {
+		t.Fatalf("first symbol roles = %d, want raw bitset %d", first.SymbolRoles, wantFirstRoles)
+	}
+	if !slices.Equal(first.OverrideDocumentation, []string{"first occurrence docs"}) {
+		t.Fatalf("first override docs = %v, want exact occurrence docs", first.OverrideDocumentation)
+	}
+
+	second := matches[1]
+	if second.DocumentPath != "pkg/second.go" ||
+		second.DocumentLanguage != "go" ||
+		second.PositionEncoding != scip.PositionEncoding_UTF16CodeUnitOffsetFromLineStart ||
+		second.Symbol != target {
+		t.Fatalf("second occurrence context = %+v, want exact containing document and symbol", second)
+	}
+	if !slices.Equal(second.Range, []int32{12, 3, 14, 8}) {
+		t.Fatalf("second occurrence range = %v, want exact SCIP range", second.Range)
+	}
+	if second.HasEnclosingRange || second.EnclosingRange != nil {
+		t.Fatalf("second enclosing range = present:%v value:%v, want absent", second.HasEnclosingRange, second.EnclosingRange)
+	}
+	wantSecondRoles := int32(scip.SymbolRole_WriteAccess | scip.SymbolRole_Generated | scip.SymbolRole_Test)
+	if second.SymbolRoles != wantSecondRoles {
+		t.Fatalf("second symbol roles = %d, want raw bitset %d", second.SymbolRoles, wantSecondRoles)
+	}
+	if !slices.Equal(second.OverrideDocumentation, []string{"second occurrence docs"}) {
+		t.Fatalf("second override docs = %v, want exact occurrence docs", second.OverrideDocumentation)
+	}
+
+	for _, occurrence := range matches {
+		if occurrence.Symbol == other {
+			t.Fatalf("target lookup returned other symbol occurrence: %+v", occurrence)
+		}
+	}
+	if got := view.OccurrencesForSymbol("Target"); len(got) != 0 {
+		t.Fatalf("partial symbol lookup = %+v, want empty exact-match result", got)
+	}
+	if got := view.OccurrencesForSymbol("scip-go gomod example.com/project . shared/Missing()."); len(got) != 0 {
+		t.Fatalf("absent symbol lookup = %+v, want empty traversal result", got)
+	}
+
+	matches[0].Range[0] = 99
+	matches[0].OverrideDocumentation[0] = "mutated"
+	again := view.OccurrencesForSymbol(target)
+	if again[0].Range[0] != 2 || again[0].OverrideDocumentation[0] != "first occurrence docs" {
+		t.Fatalf("mutating lookup result changed stored occurrence: %+v", again[0])
+	}
+}
+
 func TestNewViewPreservesOccurrenceLocationFactsWithoutSourceText(t *testing.T) {
 	t.Parallel()
 
