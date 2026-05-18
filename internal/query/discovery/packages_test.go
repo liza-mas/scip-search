@@ -223,6 +223,30 @@ func TestPackagesReturnsExplicitEmptyCollectionForNoMatchPrefix(t *testing.T) {
 	}
 }
 
+func TestOneLinePackagesReturnsPackageKeys(t *testing.T) {
+	t.Parallel()
+
+	payload := discovery.PackagesPayload{
+		Packages: []discovery.PackageResult{
+			{PackageKey: scipSearchPackageKey},
+			{PackageKey: sourcegraphPackageKey},
+		},
+	}
+
+	want := scipSearchPackageKey + "\n" + sourcegraphPackageKey + "\n"
+	if got := discovery.OneLinePackages(payload); got != want {
+		t.Fatalf("OneLinePackages() = %q, want %q", got, want)
+	}
+}
+
+func TestOneLinePackagesReturnsEmptyOutputForEmptyPayload(t *testing.T) {
+	t.Parallel()
+
+	if got := discovery.OneLinePackages(discovery.PackagesPayload{Packages: []discovery.PackageResult{}}); got != "" {
+		t.Fatalf("OneLinePackages(empty) = %q, want empty", got)
+	}
+}
+
 func discoveryPackagesFixtureView() traversal.View {
 	return traversal.NewView(runtimecontract.LoadedIndex{
 		Index: &scip.Index{

@@ -3,7 +3,7 @@
 Status: review
 
 ## Goal
-Successful `scip-search` query commands write deterministic machine-readable stdout, leave stderr available for diagnostics, and exit with the documented success status. JSON remains the shared default contract for query results except for the explicitly documented `symbols --one-line` output mode, which is also the default `symbols --name` mode.
+Successful `scip-search` query commands write deterministic machine-readable stdout, leave stderr available for diagnostics, and exit with the documented success status. One-line text is the shared default for query results, while explicit JSON-producing modes remain parseable structured outputs.
 
 ## Parent Epic
 specs/epics/readme/20260517-095535-epic-planning-1.md - Capability CAP-003
@@ -21,7 +21,7 @@ Applies to: successful runtime paths for documented query commands.
 
 ### References
 - goal spec: README.md#what-is-scip-search - Defines `scip-search` as a one-shot binary that loads an index, answers a query, prints the selected successful output format to stdout, and exits.
-- parent epic: specs/epics/readme/20260517-095535-epic-planning-1.md#capability-cap-003---report-machine-readable-results-and-actionable-failures - Defines shared stream/status conventions; the symbol discovery story defines the later `symbols --one-line` exception to JSON success output.
+- parent epic: specs/epics/readme/20260517-095535-epic-planning-1.md#capability-cap-003---report-machine-readable-results-and-actionable-failures - Defines shared stream/status conventions; query-specific stories define one-line and JSON output modes.
 - dependency story: specs/stories/readme/20260517-095535-epic-planning-1/cli-command-routing-and-usage.md - Defines the documented query command names.
 - dependency story: specs/stories/readme/20260517-095535-epic-planning-1/cli-one-shot-process-lifecycle.md - Defines one selected command per process invocation.
 - dependency story: specs/stories/readme/20260517-095535-epic-planning-1/scip-index-loading-boundary.md - Defines the loaded index boundary before query-specific execution.
@@ -30,7 +30,7 @@ Applies to: successful runtime paths for documented query commands.
 
 ### Non-Functional Requirements
 - NFR-000-1: Successful stdout must be suitable for automation consumption and must not contain progress text, warnings, logging, prompts, or human-oriented decoration.
-- NFR-000-2: The shared success stream contract must apply consistently to `references`, `implementations`, `packages`, and JSON-producing `symbols` modes. The query-specific symbol discovery contract owns the `symbols --one-line` exception.
+- NFR-000-2: The shared success stream contract must apply consistently to default one-line query modes and explicit JSON-producing modes.
 
 ### Related External Components
 - Component C-001 - SCIP index file: The on-disk input selected by the caller with `--index`.
@@ -46,7 +46,7 @@ Applies to: successful runtime paths for documented query commands.
 
 ### Assumptions
 - **ASM-000-1**: A successful process status means exit status `0`. - *Why*: The epic requires documented process status and nonzero failure status; `0` is the standard CLI success status visible to automation callers. - Confidence: HIGH
-- **ASM-000-2**: "Structured JSON" means stdout can be parsed as one complete JSON value for a selected JSON-producing command result. - *Why*: JSON modes remain parseable automation outputs while the symbol discovery story owns the one-line exception. - Confidence: HIGH
+- **ASM-000-2**: "Structured JSON" means stdout can be parsed as one complete JSON value for a selected JSON-producing command result. - *Why*: JSON modes remain parseable automation outputs while default one-line modes optimize terminal and agent workflows. - Confidence: HIGH
 
 ### Open Questions
 - None.
@@ -65,10 +65,10 @@ Applies to: successful runtime paths for documented query commands.
 ### Acceptance Criteria
 - AC-001-1: Given any documented JSON-producing query mode completes successfully, when the caller reads stdout, then stdout contains exactly one complete structured JSON value for that selected command's result.
 - AC-001-2: Given a successful `symbols --nested-json` or `symbols --json` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
-- AC-001-3: Given a successful `references` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
-- AC-001-4: Given a successful `implementations` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
-- AC-001-5: Given a successful `packages` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
-- AC-001-6: Given a successful default `symbols --name` command or explicit `symbols --one-line` command, when the caller reads stdout, then stdout follows the query-specific one-line symbol discovery contract instead of this JSON contract.
+- AC-001-3: Given a successful `references --json` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
+- AC-001-4: Given a successful `implementations --json` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
+- AC-001-5: Given a successful `packages --json` command, when the caller parses stdout as JSON, then parsing succeeds without removing any non-JSON prefix, suffix, prompt, warning, or progress text.
+- AC-001-6: Given a successful default query command or explicit `--one-line` query command, when the caller reads stdout, then stdout follows the query-specific one-line contract instead of this JSON contract.
 
 ### Depends on:
 Implementation ordering:
@@ -107,7 +107,7 @@ Run time coupling:
 
 ### Depends on:
 Implementation ordering:
-- Story ST-001 - Emit Parseable JSON on Successful Queries
+- Story ST-001 - Emit Parseable JSON on Successful JSON Queries
 
 Run time coupling:
 - Interface I-003-001 - CLI process contract

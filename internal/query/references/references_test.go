@@ -113,6 +113,47 @@ func TestQueryReturnsExplicitEmptyCollectionForMissingOrDefinitionOnlySymbol(t *
 	}
 }
 
+func TestOneLineFormatsReferenceLocationsAndRoles(t *testing.T) {
+	t.Parallel()
+
+	payload := references.Payload{
+		References: []references.Reference{
+			{
+				Symbol:       querySymbol,
+				DocumentPath: "cmd/query.go",
+				Range:        []int32{8, 1, 8, 15},
+				Roles:        int32(scip.SymbolRole_ReadAccess),
+			},
+			{
+				Symbol:       incomingSymbol,
+				DocumentPath: "pkg/incoming.go",
+				Range:        []int32{9},
+				Roles:        int32(scip.SymbolRole_WriteAccess),
+			},
+			{
+				Symbol: relatedSymbol,
+				Range:  []int32{10, 2, 14},
+				Roles:  int32(scip.SymbolRole_ReadAccess),
+			},
+		},
+	}
+
+	want := "cmd/query.go:9:2:scip-go gomod example.com/project . pkg/Query# roles=8\n" +
+		"pkg/incoming.go:0:0:scip-go gomod example.com/project . pkg/Incoming# roles=4\n" +
+		"?:0:0:scip-go gomod example.com/project . pkg/Related# roles=8\n"
+	if got := references.OneLine(payload); got != want {
+		t.Fatalf("OneLine() = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineReturnsEmptyOutputForEmptyReferencePayload(t *testing.T) {
+	t.Parallel()
+
+	if got := references.OneLine(references.Payload{References: []references.Reference{}}); got != "" {
+		t.Fatalf("OneLine(empty) = %q, want empty", got)
+	}
+}
+
 func referenceFixtureView() traversal.View {
 	return traversal.NewView(runtimecontract.LoadedIndex{
 		Index: &scip.Index{

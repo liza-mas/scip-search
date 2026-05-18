@@ -9,7 +9,7 @@ Successful `references --symbol` responses expose a stable `references` payload 
 specs/epics/readme/20260517-141006-epic-planning-4.md - Capability CAP-002
 
 ## Context
-The shared runtime contract owns JSON-only stdout on success, diagnostics on failure, and process status. CAP-001 owns top-level queried-symbol preservation and successful empty no-match responses. This document defines only the reference-query payload fields and ordering needed once reference occurrence selection has produced zero or more selected occurrences.
+The shared runtime contract owns stdout stream purity on success, diagnostics on failure, and process status. CAP-001 owns top-level queried-symbol preservation and successful empty no-match responses. This document defines only the `references --json` payload fields and ordering needed once reference occurrence selection has produced zero or more selected occurrences.
 
 ## Personas
 - **Automation Agent**: An AI or script-driven caller parsing `scip-search references` output, needing stable source locations and matched symbols for later code-navigation or editing workflows.
@@ -17,10 +17,10 @@ The shared runtime contract owns JSON-only stdout on success, diagnostics on fai
 
 ## General information
 
-Applies to: successful `references --symbol` JSON payloads.
+Applies to: successful `references --symbol ... --json` payloads.
 
 ### References
-- goal spec: README.md#what-is-scip-search - Requires `scip-search` to print structured JSON for query results and documents the `references --symbol` command form.
+- goal spec: README.md#what-is-scip-search - Documents the `references --symbol` command form and explicit `--json` output mode.
 - parent epic: specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-002---return-reference-occurrences-for-exact-symbols - Requires reference entries with matched occurrence symbol, document path, SCIP range, role context, and originally queried symbol in the response envelope.
 - parent epic: specs/epics/readme/20260517-141006-epic-planning-4.md#general-information - Requires deterministic ordering and explicit empty result collections for successful no-match cases.
 - dependency story: specs/stories/readme/epic-planning-4/CAP-001-01-exact-symbol-input.md - Defines top-level queried-symbol preservation.
@@ -43,13 +43,13 @@ Applies to: successful `references --symbol` JSON payloads.
 ### Interfaces
 - I-001-001 - Reference query contract (Interface 001 of Component C-001): The `references --symbol` query returns a `references` collection for the queried exact symbol.
 - I-002-001 - Selected reference occurrence contract (Interface 001 of Component C-002): Selected occurrences expose matched symbol, document path, SCIP range, and role context for JSON formatting.
-- I-003-001 - CLI process contract (Interface 001 of Component C-003): The shared successful runtime contract provides a parseable JSON value on stdout.
+- I-003-001 - CLI process contract (Interface 001 of Component C-003): The shared successful runtime contract provides a parseable JSON value on stdout for explicit JSON-producing modes.
 
 ### Out of Scope
 - Shared successful stdout stream rules, stderr behavior, process status, runtime failures, command routing, or index-path behavior.
 - Selecting reference occurrences, following reference relationships, interpreting exact input, or defining no-match success as a command outcome.
 - Result schemas for `symbols`, `packages`, or `implementations`.
-- Source snippets, hover text, caller-function grouping, call hierarchy synthesis, semantic ranking, graph output, alternate output formats, or human-readable tables.
+- Source snippets, hover text, caller-function grouping, call hierarchy synthesis, semantic ranking, graph output, or default one-line output.
 
 ### Assumptions
 - **ASM-000-1**: The reference query result is a JSON object with top-level `symbol` and `references` fields. - *Why*: CAP-001 already assumes top-level `symbol`, and CAP-002 needs a command-specific collection for reference entries. - Confidence: MEDIUM
@@ -72,7 +72,7 @@ Applies to: successful `references --symbol` JSON payloads.
 **As an** Automation Agent parsing successful reference output, **I want to** receive each selected reference occurrence with its matched symbol, document path, SCIP range, and role context, **so that** I can navigate to the use site without reparsing the SCIP index or reading source files.
 
 ### Acceptance Criteria
-- AC-001-1: Given a successful `references --symbol` query returns one or more selected reference occurrences, when the caller parses the query-specific JSON payload, then the top-level payload contains `symbol` equal to the caller-provided query symbol and a `references` collection.
+- AC-001-1: Given a successful `references --symbol ... --json` query returns one or more selected reference occurrences, when the caller parses the query-specific JSON payload, then the top-level payload contains `symbol` equal to the caller-provided query symbol and a `references` collection.
 - AC-001-2: Given a selected reference occurrence appears in the `references` collection, when the caller inspects that entry, then it exposes `symbol`, `documentPath`, `range`, and `roles`.
 - AC-001-3: Given a reference entry was selected from the exact queried symbol or a reference-related symbol, when the caller reads the entry's `symbol`, then it equals the matched occurrence symbol from traversal, not a display name, descriptor fragment, or rewritten query symbol.
 - AC-001-4: Given a reference entry includes `documentPath`, when the caller compares it to traversal data, then it preserves the SCIP document path associated with the occurrence.

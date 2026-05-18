@@ -17,10 +17,10 @@ Implementation relationship selection identifies which implementation symbols qu
 
 ## General information
 
-Applies to: successful JSON payloads for exact `implementations --symbol` queries after implementation relationship selection.
+Applies to: successful JSON payloads for exact `implementations --symbol ... --json` queries after implementation relationship selection.
 
 ### References
-- goal spec: README.md#what-is-scip-search - Requires query commands to print structured JSON and documents `implementations --symbol`.
+- goal spec: README.md#what-is-scip-search - Documents `implementations --symbol` and explicit `--json` output mode.
 - goal spec: README.md#language-support - Requires official SCIP bindings and direct SCIP output reads.
 - parent epic: specs/epics/readme/20260517-141006-epic-planning-4.md#general-information - Requires stable payloads, explicit empty collections, document-relative paths, 0-based SCIP ranges, and no source-file reads to infer missing locations.
 - parent epic: specs/epics/readme/20260517-141006-epic-planning-4.md#capability-cap-003---return-implementation-relationship-results - Requires implementation symbols, incoming relationship basis, definition locations when available, document paths, and ranges when present.
@@ -46,12 +46,12 @@ Applies to: successful JSON payloads for exact `implementations --symbol` querie
 - I-001-002 - Implementation query contract (Interface 002 of Component C-001): The `implementations --symbol` query returns a top-level `symbol` value and an `implementations` collection for the queried exact symbol.
 - I-002-001 - Implementation location source (Interface 001 of Component C-002): Traversal data exposes definition document paths and SCIP ranges for implementation symbols when those occurrences are available.
 - I-003-001 - Implementation relationship source (Interface 001 of Component C-003): Traversal data exposes the incoming implementation relationship basis for each implementation entry.
-- I-004-001 - CLI process contract (Interface 001 of Component C-004): The shared process contract that exposes successful query payloads as parseable JSON on stdout.
+- I-004-001 - CLI process contract (Interface 001 of Component C-004): The shared process contract that exposes successful JSON-producing query payloads as parseable JSON on stdout.
 
 ### Out of Scope
 - Shared invocation errors, index-loading errors, stderr diagnostics, stdout stream purity, and process status taxonomy.
 - Selecting which relationships qualify as implementation results beyond the sibling selection story.
-- Source-file reads, synthesized locations, hover text, reference occurrences, type-definition traversal, full hierarchy graphs, package dependency graphs, semantic similarity, or alternate output formats.
+- Source-file reads, synthesized locations, hover text, reference occurrences, type-definition traversal, full hierarchy graphs, package dependency graphs, semantic similarity, or default one-line output.
 - Golden fixture authoring and fixture generation.
 
 ### Assumptions
@@ -75,7 +75,7 @@ Applies to: successful JSON payloads for exact `implementations --symbol` querie
 **As an** Automation Agent parsing implementation-query output, **I want to** receive a stable `implementations` collection with implementation symbols and their incoming relationship basis, **so that** I can compare and navigate implementation results deterministically.
 
 ### Acceptance Criteria
-- AC-001-1: Given a successful `implementations --symbol` query returns one or more implementation results, when the caller parses the query-specific JSON payload, then the payload includes top-level `symbol` equal to the caller-provided queried symbol and an `implementations` collection.
+- AC-001-1: Given a successful `implementations --symbol ... --json` query returns one or more implementation results, when the caller parses the query-specific JSON payload, then the payload includes top-level `symbol` equal to the caller-provided queried symbol and an `implementations` collection.
 - AC-001-2: Given an implementation entry appears in the `implementations` collection, when the caller inspects that entry, then it includes `implementationSymbol` equal to the qualifying implementer symbol.
 - AC-001-3: Given an implementation entry appears in the `implementations` collection, when the caller inspects that entry, then it includes a `relationship` value that identifies the entry as based on an incoming SCIP implementation relationship to the queried symbol.
 - AC-001-4: Given the same loaded index and queried symbol are used across repeated successful runs, when the caller compares the `implementations` collection order, then entries appear in deterministic order.

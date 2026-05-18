@@ -58,3 +58,17 @@ func Packages(view traversal.View, prefix string) (PackagesPayload, error) {
 
 	return PackagesPayload{Packages: results}, nil
 }
+
+func OneLinePackages(payload PackagesPayload) string {
+	if len(payload.Packages) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, pkg := range payload.Packages {
+		builder.WriteString(pkg.PackageKey)
+		builder.WriteByte('\n')
+	}
+
+	return builder.String()
+}

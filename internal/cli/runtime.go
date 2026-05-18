@@ -21,9 +21,9 @@ const helpText = `Usage:
   scip-search --help
   scip-search --version
   scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
-  scip-search references --index <index-path> --symbol <scip-symbol>
-  scip-search implementations --index <index-path> --symbol <scip-symbol>
-  scip-search packages --index <index-path> [--prefix <prefix>]
+  scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]
+  scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]
+  scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 
 Commands:
   symbols          Find symbols by literal partial name.

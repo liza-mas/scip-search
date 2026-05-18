@@ -2,10 +2,13 @@ package implementations
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/scip-code/scip/bindings/go/scip"
 
+	"scip-search/internal/query/oneline"
 	"scip-search/internal/traversal"
 )
 
@@ -67,6 +70,27 @@ func Implementations(view traversal.View, symbol string) (Payload, error) {
 	slices.SortFunc(results, compareResults)
 
 	return Payload{Symbol: symbol, Implementations: results}, nil
+}
+
+func OneLine(payload Payload) string {
+	if len(payload.Implementations) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, implementation := range payload.Implementations {
+		path, line, column := oneline.Location(implementation.DocumentPath, implementation.Range)
+		fmt.Fprintf(
+			&builder,
+			"%s:%d:%d:%s\n",
+			path,
+			line,
+			column,
+			implementation.ImplementationSymbol,
+		)
+	}
+
+	return builder.String()
 }
 
 type definition struct {

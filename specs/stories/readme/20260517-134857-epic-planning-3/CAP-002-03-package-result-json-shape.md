@@ -9,7 +9,7 @@ Successful package discovery results expose a stable `packages` payload whose en
 specs/epics/readme/20260517-134857-epic-planning-3.md - Capability CAP-002
 
 ## Context
-The shared runtime contract owns JSON-only stdout on success. This document defines only the package query payload that appears inside that successful JSON result, so automation can compare package identities without parsing full symbol descriptors.
+The shared runtime contract owns stdout stream purity on success. This document defines only the package query payload that appears when callers select `packages --json`, so automation can compare package identities without parsing full symbol descriptors.
 
 ## Personas
 - **Automation Agent**: An AI or script-driven caller parsing `scip-search` output, needing stable package fields for comparison and follow-up query planning.
@@ -17,11 +17,11 @@ The shared runtime contract owns JSON-only stdout on success. This document defi
 
 ## General information
 
-Applies to: successful unfiltered and filtered package query payloads.
+Applies to: successful unfiltered and filtered `packages --json` payloads.
 
 ### References
 - goal spec: README.md#scip-symbol-format - Defines SCIP symbol identity components, including scheme, package manager, package name, and package version.
-- goal spec: README.md#what-is-scip-search - Requires `scip-search` to print structured JSON for query results.
+- goal spec: README.md#what-is-scip-search - Defines `packages --json` as the structured JSON package result mode.
 - parent epic: specs/epics/readme/20260517-134857-epic-planning-3.md#capability-cap-002---list-indexed-packages-with-prefix-filtering - Requires a `packages` collection with identity components and an exact package key.
 - consistency check: specs/stories/readme/20260517-095535-epic-planning-1/stdout-json-success-contract.md - Owns stdout stream purity and leaves query-specific result fields to this document.
 - consistency check: specs/stories/readme/20260517-095535-epic-planning-1/stderr-exit-error-contract.md - Owns shared runtime failures, which this document does not redefine.
@@ -43,7 +43,7 @@ Applies to: successful unfiltered and filtered package query payloads.
 - Defining stdout stream purity, stderr diagnostics, exit status, missing command, unsupported command, missing `--index`, unreadable index, or invalid SCIP behavior.
 - Defining result schemas for `symbols`, `references`, or `implementations`.
 - Returning symbol descriptors, occurrences, source ranges, hover text, reference lists, implementation lists, dependency data, registry data, or resolved versions.
-- Pretty printing, alternate output formats, progress messages, or human-only display output.
+- Pretty printing, default one-line output, progress messages, or human-only display output.
 
 ### Assumptions
 - **ASM-000-1**: The package query result is a JSON object with a top-level `packages` collection. - *Why*: The parent epic explicitly names a `packages` collection and the shared runtime story permits query-specific payload schemas. - Confidence: HIGH
@@ -66,7 +66,7 @@ Applies to: successful unfiltered and filtered package query payloads.
 **As an** Automation Agent parsing successful package discovery output, **I want to** receive package entries with explicit SCIP package identity components, **so that** I can compare packages without reparsing full symbol strings.
 
 ### Acceptance Criteria
-- AC-001-1: Given a successful package query returns one or more package identities, when the caller parses the query-specific JSON payload, then the top-level payload contains a `packages` collection.
+- AC-001-1: Given a successful `packages --json` query returns one or more package identities, when the caller parses the query-specific JSON payload, then the top-level payload contains a `packages` collection.
 - AC-001-2: Given a package identity appears in the `packages` collection, when the caller inspects that package entry, then it exposes `scheme`, `packageManager`, `packageName`, `packageVersion`, and `packageKey`.
 - AC-001-3: Given a package entry is derived from a SCIP symbol, when the caller compares its identity fields to that symbol, then the fields preserve the symbol's scheme, package manager, package name, and package version exactly.
 - AC-001-4: Given a package entry includes `packageKey`, when the caller compares keys across entries, then equal keys identify the same package identity and different keys identify distinct package identities.
@@ -83,7 +83,7 @@ Run time coupling:
 ### Out of Scope
 - Shared successful stdout stream rules, stderr behavior, process status, runtime failures, or command routing.
 - Returning full symbol descriptors, symbol locations, references, implementations, dependency graph edges, registry metadata, or resolved package versions.
-- Supporting alternate field names, alternate output formats, or human-readable package tables.
+- Supporting alternate field names or default one-line package output.
 
 ### Assumptions
 - **ASM-001-1**: The JSON shape remains the same for unfiltered and prefix-filtered successful package results. - *Why*: Both commands return the same kind of package identities, differing only in which entries are included. - Confidence: HIGH

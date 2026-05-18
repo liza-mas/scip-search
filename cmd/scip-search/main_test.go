@@ -93,9 +93,9 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 	for _, want := range []string{
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
-		"scip-search references --index <index-path> --symbol <scip-symbol>",
-		"scip-search implementations --index <index-path> --symbol <scip-symbol>",
-		"scip-search packages --index <index-path> [--prefix <prefix>]",
+		"scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
+		"scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
+		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
@@ -410,7 +410,23 @@ func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
+	want := strings.Join([]string{
+		"github.com/liza-mas/scip-search gomod example.com/scheme-only .",
+		"scip-go github.com/liza-mas/scip-search example.com/manager-only .",
+		"scip-go gomod example.com/dependency v1.2.3",
+		"scip-go gomod example.com/descriptor-only .",
+		"scip-go gomod example.com/fixture .",
+		"scip-go gomod example.com/path-only .",
+		"scip-go gomod example.com/symbol-name-only .",
+		"scip-go gomod example.com/version-only github.com/liza-mas/scip-search",
+		"scip-go gomod github.com/liza-mas/liza .",
+		"scip-go gomod github.com/liza-mas/scip-search .",
+		"scip-go gomod github.com/sourcegraph/scip-bindings .",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("packages stdout = %q, want one-line output %q", stdout.String(), want)
+	}
 }
 
 func TestRunProductionPackagesCommandAcceptsPrefix(t *testing.T) {
@@ -428,10 +444,35 @@ func TestRunProductionPackagesCommandAcceptsPrefix(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-liza-mas.json")
+	want := strings.Join([]string{
+		"scip-go gomod github.com/liza-mas/liza .",
+		"scip-go gomod github.com/liza-mas/scip-search .",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("packages prefix stdout = %q, want one-line output %q", stdout.String(), want)
+	}
 }
 
-func TestRunProductionImplementationsCommandUsesImplementationQuery(t *testing.T) {
+func TestRunProductionPackagesCommandAcceptsJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"packages", "--index", fixture.IndexPath, "--json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("packages --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
+}
+
+func TestRunProductionImplementationsCommandDefaultsToOneLineOutput(t *testing.T) {
 	t.Parallel()
 
 	fixture := traversaltest.LoadSharedFixture(t)
@@ -446,10 +487,31 @@ func TestRunProductionImplementationsCommandUsesImplementationQuery(t *testing.T
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
+	want := "cmd/alpha.go:3:7:scip-go gomod example.com/fixture . cmd/Alpha().\n"
+	if stdout.String() != want {
+		t.Fatalf("implementations stdout = %q, want one-line output %q", stdout.String(), want)
+	}
+}
+
+func TestRunProductionImplementationsCommandAcceptsJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.ImplSymbol, "--json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
 	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json")
 }
 
-func TestRunProductionReferencesCommandUsesReferencesImplementation(t *testing.T) {
+func TestRunProductionReferencesCommandDefaultsToOneLineOutput(t *testing.T) {
 	t.Parallel()
 
 	fixture := traversaltest.LoadSharedFixture(t)
@@ -464,20 +526,27 @@ func TestRunProductionReferencesCommandUsesReferencesImplementation(t *testing.T
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-alpha.json")
+	want := strings.Join([]string{
+		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
+		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("references stdout = %q, want one-line output %q", stdout.String(), want)
+	}
 }
 
-func TestRunProductionReferencesCommandIncludesIncomingReferenceRelationships(t *testing.T) {
+func TestRunProductionReferencesCommandAcceptsJSONOutput(t *testing.T) {
 	t.Parallel()
 
 	fixture := traversaltest.LoadSharedFixture(t)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	status := run([]string{"references", "--index", fixture.IndexPath, "--symbol", traversaltest.BetaSymbol}, &stdout, &stderr)
+	status := run([]string{"references", "--index", fixture.IndexPath, "--symbol", traversaltest.BetaSymbol, "--json"}, &stdout, &stderr)
 
 	if status != runtimecontract.StatusOK {
-		t.Fatalf("references incoming status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+		t.Fatalf("references --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -492,10 +561,10 @@ func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testin
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	status := run([]string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol}, &stdout, &stderr)
+	status := run([]string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--json"}, &stdout, &stderr)
 
 	if status != runtimecontract.StatusOK {
-		t.Fatalf("implementations empty status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+		t.Fatalf("implementations empty --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -516,10 +585,11 @@ func TestRunProductionReferencesCommandReturnsEmptyResultsForAbsentExactSymbol(t
 		fixture.IndexPath,
 		"--symbol",
 		"scip-go gomod example.com/fixture . missing/Absent#",
+		"--json",
 	}, &stdout, &stderr)
 
 	if status != runtimecontract.StatusOK {
-		t.Fatalf("references absent status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+		t.Fatalf("references absent --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())

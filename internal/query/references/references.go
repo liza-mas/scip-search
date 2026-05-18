@@ -1,10 +1,13 @@
 package references
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/scip-code/scip/bindings/go/scip"
 
+	"scip-search/internal/query/oneline"
 	"scip-search/internal/traversal"
 )
 
@@ -46,6 +49,28 @@ func Query(view traversal.View, symbol string) Payload {
 		Symbol:     symbol,
 		References: results,
 	}
+}
+
+func OneLine(payload Payload) string {
+	if len(payload.References) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, reference := range payload.References {
+		path, line, column := oneline.Location(reference.DocumentPath, reference.Range)
+		fmt.Fprintf(
+			&builder,
+			"%s:%d:%d:%s roles=%d\n",
+			path,
+			line,
+			column,
+			reference.Symbol,
+			reference.Roles,
+		)
+	}
+
+	return builder.String()
 }
 
 func referenceCandidateSymbols(view traversal.View, symbol string) map[string]struct{} {

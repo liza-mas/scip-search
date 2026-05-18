@@ -121,6 +121,43 @@ func TestImplementationsReturnEmptyCollectionForAbsentExactSymbol(t *testing.T) 
 	}
 }
 
+func TestOneLineFormatsImplementationLocations(t *testing.T) {
+	t.Parallel()
+
+	payload := implementations.Payload{
+		Implementations: []implementations.Result{
+			{
+				ImplementationSymbol: firstImplementation,
+				DocumentPath:         "impl/alpha.go",
+				Range:                []int32{4, 5, 14},
+			},
+			{
+				ImplementationSymbol: secondImplementation,
+				DocumentPath:         "impl/beta.go",
+				Range:                []int32{8},
+			},
+			{
+				ImplementationSymbol: externalImplementation,
+			},
+		},
+	}
+
+	want := "impl/alpha.go:5:6:scip-go gomod example.com/project . impl/AlphaDoer#\n" +
+		"impl/beta.go:0:0:scip-go gomod example.com/project . impl/BetaDoer#\n" +
+		"?:0:0:scip-go gomod example.com/dependency v1.2.3 dep/ExternalDoer#\n"
+	if got := implementations.OneLine(payload); got != want {
+		t.Fatalf("OneLine() = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineReturnsEmptyOutputForEmptyImplementationPayload(t *testing.T) {
+	t.Parallel()
+
+	if got := implementations.OneLine(implementations.Payload{Implementations: []implementations.Result{}}); got != "" {
+		t.Fatalf("OneLine(empty) = %q, want empty", got)
+	}
+}
+
 func implementationFixtureView() traversal.View {
 	return traversal.NewView(runtimecontract.LoadedIndex{
 		Index: &scip.Index{

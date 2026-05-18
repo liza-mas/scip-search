@@ -135,9 +135,12 @@ func parseSymbolArgs(args []string) (string, symbolsOutputMode, error) {
 	return name, outputMode, nil
 }
 
-func parseExactSymbolArg(args []string) (string, error) {
-	return parseRequiredQueryValue(args, "--symbol")
-}
+type oneLineJSONOutputMode int
+
+const (
+	outputOneLine oneLineJSONOutputMode = iota
+	outputJSON
+)
 
 type packagesHandler struct{}
 
@@ -146,12 +149,20 @@ func (packagesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !ok {
 		return nil, errors.New("packages handler received non-SCIP loaded index")
 	}
-	prefix, err := parsePackagePrefixArg(args)
+	prefix, outputMode, err := parsePackagePrefixArgs(args)
 	if err != nil {
 		return nil, err
 	}
 
-	return discovery.Packages(traversal.NewView(loaded), prefix)
+	payload, err := discovery.Packages(traversal.NewView(loaded), prefix)
+	if err != nil {
+		return nil, err
+	}
+	if outputMode == outputJSON {
+		return payload, nil
+	}
+
+	return runtimecontract.RawOutput{Text: discovery.OneLinePackages(payload)}, nil
 }
 
 type implementationsHandler struct{}
@@ -161,12 +172,20 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 	if !ok {
 		return nil, errors.New("implementations handler received non-SCIP loaded index")
 	}
-	symbol, err := parseExactSymbolArg(args)
+	symbol, outputMode, err := parseExactSymbolArgs(args, "implementations")
 	if err != nil {
 		return nil, err
 	}
 
-	return implementations.Implementations(traversal.NewView(loaded), symbol)
+	payload, err := implementations.Implementations(traversal.NewView(loaded), symbol)
+	if err != nil {
+		return nil, err
+	}
+	if outputMode == outputJSON {
+		return payload, nil
+	}
+
+	return runtimecontract.RawOutput{Text: implementations.OneLine(payload)}, nil
 }
 
 type referencesHandler struct{}
@@ -176,49 +195,116 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !ok {
 		return nil, errors.New("references handler received non-SCIP loaded index")
 	}
-	symbol, err := parseExactSymbolArg(args)
+	symbol, outputMode, err := parseExactSymbolArgs(args, "references")
 	if err != nil {
 		return nil, err
 	}
 
-	return references.Query(traversal.NewView(loaded), symbol), nil
+	payload := references.Query(traversal.NewView(loaded), symbol)
+	if outputMode == outputJSON {
+		return payload, nil
+	}
+
+	return runtimecontract.RawOutput{Text: references.OneLine(payload)}, nil
 }
 
-func parsePackagePrefixArg(args []string) (string, error) {
-	if len(args) == 0 {
-		return "", nil
-	}
+func parsePackagePrefixArgs(args []string) (string, oneLineJSONOutputMode, error) {
 	if duplicateFlag(args, "--prefix") {
-		return "", errors.New("--prefix can only be provided once")
+		return "", outputOneLine, errors.New("--prefix can only be provided once")
 	}
-	if args[0] == "--prefix" && (len(args) == 1 || isMissingQueryValue(args[1])) {
-		return "", errors.New("--prefix requires a value")
+	if duplicateFlag(args, "--one-line") {
+		return "", outputOneLine, errors.New("--one-line can only be provided once")
 	}
-	if len(args) != 2 {
-		return "", errors.New("packages only accepts --prefix")
-	}
-	if args[0] != "--prefix" {
-		return "", errors.New("packages only accepts --prefix")
-	}
-	if isMissingQueryValue(args[1]) {
-		return "", errors.New("--prefix requires a value")
+	if duplicateFlag(args, "--json") {
+		return "", outputOneLine, errors.New("--json can only be provided once")
 	}
 
-	return args[1], nil
+	var prefix string
+	outputMode := outputOneLine
+	hasOutputMode := false
+	for position := 0; position < len(args); position++ {
+		arg := args[position]
+		switch arg {
+		case "--prefix":
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return "", outputOneLine, errors.New("--prefix requires a value")
+			}
+			prefix = args[position+1]
+			position++
+		case "--one-line":
+			if hasOutputMode {
+				return "", outputOneLine, errors.New("packages output flags are mutually exclusive")
+			}
+			outputMode = outputOneLine
+			hasOutputMode = true
+		case "--json":
+			if hasOutputMode {
+				return "", outputOneLine, errors.New("packages output flags are mutually exclusive")
+			}
+			outputMode = outputJSON
+			hasOutputMode = true
+		default:
+			return "", outputOneLine, errors.New("packages only accepts --prefix, --one-line, and --json")
+		}
+	}
+
+	return prefix, outputMode, nil
 }
 
-func parseRequiredQueryValue(args []string, flag string) (string, error) {
+func parseExactSymbolArgs(args []string, command string) (string, oneLineJSONOutputMode, error) {
+	return parseRequiredQueryValueWithOutput(args, "--symbol", command)
+}
+
+func parseRequiredQueryValueWithOutput(args []string, flag string, command string) (string, oneLineJSONOutputMode, error) {
 	if len(args) == 0 {
-		return "", errors.New("missing " + flag)
+		return "", outputOneLine, errors.New("missing " + flag)
 	}
-	if args[0] == flag && (len(args) == 1 || isMissingQueryValue(args[1])) {
-		return "", errors.New(flag + " requires a value")
+	if duplicateFlag(args, flag) {
+		return "", outputOneLine, errors.New(flag + " can only be provided once")
 	}
-	if len(args) != 2 || args[0] != flag || duplicateFlag(args, flag) {
-		return "", errors.New(flag + " accepts exactly one value")
+	if duplicateFlag(args, "--one-line") {
+		return "", outputOneLine, errors.New("--one-line can only be provided once")
+	}
+	if duplicateFlag(args, "--json") {
+		return "", outputOneLine, errors.New("--json can only be provided once")
 	}
 
-	return args[1], nil
+	var value string
+	hasValue := false
+	outputMode := outputOneLine
+	hasOutputMode := false
+	for position := 0; position < len(args); position++ {
+		arg := args[position]
+		switch arg {
+		case flag:
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return "", outputOneLine, errors.New(flag + " requires a value")
+			}
+			value = args[position+1]
+			hasValue = true
+			position++
+		case "--one-line":
+			if hasOutputMode {
+				return "", outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputOneLine
+			hasOutputMode = true
+		case "--json":
+			if hasOutputMode {
+				return "", outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputJSON
+			hasOutputMode = true
+		default:
+			return "", outputOneLine, errors.New(command + " only accepts " + flag + ", --one-line, and --json")
+		}
+	}
+
+	if !hasValue {
+		return "", outputOneLine, errors.New("missing " + flag)
+	}
+
+	return value, outputMode, nil
 }
 
 func duplicateFlag(args []string, flag string) bool {
