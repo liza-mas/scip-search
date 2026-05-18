@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
@@ -99,50 +100,61 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 }
 
 func parseSymbolNameArg(args []string) (string, error) {
-	for position := 0; position < len(args); position++ {
-		if args[position] != "--name" {
-			continue
-		}
-		if position+1 >= len(args) || args[position+1] == "" {
-			return "", errors.New("--name requires a value")
-		}
-
-		return args[position+1], nil
-	}
-
-	return "", errors.New("missing --name")
+	return parseRequiredQueryValue(args, "--name")
 }
 
 func parseExactSymbolArg(args []string) (string, error) {
-	for position := 0; position < len(args); position++ {
-		if args[position] != "--symbol" {
-			continue
-		}
-		if position+1 >= len(args) || args[position+1] == "" {
-			return "", errors.New("--symbol requires a value")
-		}
-
-		return args[position+1], nil
-	}
-
-	return "", errors.New("missing --symbol")
+	return parseRequiredQueryValue(args, "--symbol")
 }
 
 func parsePackagePrefixArg(args []string) (string, error) {
-	var prefix string
-	for position := 0; position < len(args); position++ {
-		if args[position] != "--prefix" {
-			return "", errors.New("packages only accepts --prefix")
-		}
-		if position+1 >= len(args) || args[position+1] == "" {
-			return "", errors.New("--prefix requires a value")
-		}
-		if prefix != "" {
-			return "", errors.New("--prefix can only be provided once")
-		}
-		prefix = args[position+1]
-		position++
+	if len(args) == 0 {
+		return "", nil
+	}
+	if duplicateFlag(args, "--prefix") {
+		return "", errors.New("--prefix can only be provided once")
+	}
+	if args[0] == "--prefix" && (len(args) == 1 || isMissingQueryValue(args[1])) {
+		return "", errors.New("--prefix requires a value")
+	}
+	if len(args) != 2 {
+		return "", errors.New("packages only accepts --prefix")
+	}
+	if args[0] != "--prefix" {
+		return "", errors.New("packages only accepts --prefix")
+	}
+	if isMissingQueryValue(args[1]) {
+		return "", errors.New("--prefix requires a value")
 	}
 
-	return prefix, nil
+	return args[1], nil
+}
+
+func parseRequiredQueryValue(args []string, flag string) (string, error) {
+	if len(args) == 0 {
+		return "", errors.New("missing " + flag)
+	}
+	if args[0] == flag && (len(args) == 1 || isMissingQueryValue(args[1])) {
+		return "", errors.New(flag + " requires a value")
+	}
+	if len(args) != 2 || args[0] != flag || duplicateFlag(args, flag) {
+		return "", errors.New(flag + " accepts exactly one value")
+	}
+
+	return args[1], nil
+}
+
+func duplicateFlag(args []string, flag string) bool {
+	count := 0
+	for _, arg := range args {
+		if arg == flag {
+			count++
+		}
+	}
+
+	return count > 1
+}
+
+func isMissingQueryValue(value string) bool {
+	return value == "" || strings.HasPrefix(value, "--")
 }

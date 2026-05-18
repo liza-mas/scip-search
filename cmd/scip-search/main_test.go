@@ -310,6 +310,24 @@ func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
 	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
 }
 
+func TestRunProductionPackagesCommandAcceptsPrefix(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"packages", "--index", fixture.IndexPath, "--prefix", "github.com/liza-mas/"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("packages prefix status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-liza-mas.json")
+}
+
 func TestRunProductionImplementationsCommandUsesImplementationQuery(t *testing.T) {
 	t.Parallel()
 
@@ -404,6 +422,221 @@ func TestRunProductionReferencesCommandReturnsEmptyResultsForAbsentExactSymbol(t
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-absent.json")
+}
+
+func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		command string
+		args    []string
+	}{
+		{
+			name:    "symbols missing name",
+			command: "symbols",
+			args:    nil,
+		},
+		{
+			name:    "symbols missing name value",
+			command: "symbols",
+			args:    []string{"--name"},
+		},
+		{
+			name:    "symbols empty name",
+			command: "symbols",
+			args:    []string{"--name", ""},
+		},
+		{
+			name:    "symbols flag-shaped name",
+			command: "symbols",
+			args:    []string{"--name", "--unknown"},
+		},
+		{
+			name:    "symbols duplicate name",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "--name", "Run"},
+		},
+		{
+			name:    "symbols unknown trailing flag",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "--unknown"},
+		},
+		{
+			name:    "symbols stray positional before name",
+			command: "symbols",
+			args:    []string{"stray", "--name", "Supervisor"},
+		},
+		{
+			name:    "symbols stray positional after name",
+			command: "symbols",
+			args:    []string{"--name", "Supervisor", "stray"},
+		},
+		{
+			name:    "symbols wrong query flag",
+			command: "symbols",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol},
+		},
+		{
+			name:    "references missing symbol",
+			command: "references",
+			args:    nil,
+		},
+		{
+			name:    "references missing symbol value",
+			command: "references",
+			args:    []string{"--symbol"},
+		},
+		{
+			name:    "references empty symbol",
+			command: "references",
+			args:    []string{"--symbol", ""},
+		},
+		{
+			name:    "references flag-shaped symbol",
+			command: "references",
+			args:    []string{"--symbol", "--unknown"},
+		},
+		{
+			name:    "references duplicate symbol",
+			command: "references",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--symbol", traversaltest.BetaSymbol},
+		},
+		{
+			name:    "references unknown trailing flag",
+			command: "references",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--unknown"},
+		},
+		{
+			name:    "references stray positional before symbol",
+			command: "references",
+			args:    []string{"stray", "--symbol", traversaltest.AlphaSymbol},
+		},
+		{
+			name:    "references stray positional after symbol",
+			command: "references",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "stray"},
+		},
+		{
+			name:    "references wrong query flag",
+			command: "references",
+			args:    []string{"--name", "Supervisor"},
+		},
+		{
+			name:    "implementations missing symbol",
+			command: "implementations",
+			args:    nil,
+		},
+		{
+			name:    "implementations missing symbol value",
+			command: "implementations",
+			args:    []string{"--symbol"},
+		},
+		{
+			name:    "implementations empty symbol",
+			command: "implementations",
+			args:    []string{"--symbol", ""},
+		},
+		{
+			name:    "implementations flag-shaped symbol",
+			command: "implementations",
+			args:    []string{"--symbol", "--unknown"},
+		},
+		{
+			name:    "implementations duplicate symbol",
+			command: "implementations",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--symbol", traversaltest.ImplSymbol},
+		},
+		{
+			name:    "implementations unknown trailing flag",
+			command: "implementations",
+			args:    []string{"--symbol", traversaltest.ImplSymbol, "--unknown"},
+		},
+		{
+			name:    "implementations stray positional before symbol",
+			command: "implementations",
+			args:    []string{"stray", "--symbol", traversaltest.ImplSymbol},
+		},
+		{
+			name:    "implementations stray positional after symbol",
+			command: "implementations",
+			args:    []string{"--symbol", traversaltest.ImplSymbol, "stray"},
+		},
+		{
+			name:    "implementations wrong query flag",
+			command: "implementations",
+			args:    []string{"--name", "Supervisor"},
+		},
+		{
+			name:    "packages stray positional",
+			command: "packages",
+			args:    []string{"stray"},
+		},
+		{
+			name:    "packages missing prefix value",
+			command: "packages",
+			args:    []string{"--prefix"},
+		},
+		{
+			name:    "packages empty prefix",
+			command: "packages",
+			args:    []string{"--prefix", ""},
+		},
+		{
+			name:    "packages flag-shaped prefix",
+			command: "packages",
+			args:    []string{"--prefix", "--name"},
+		},
+		{
+			name:    "packages duplicate prefix",
+			command: "packages",
+			args:    []string{"--prefix", "github.com/liza-mas/", "--prefix", "github.com/sourcegraph/"},
+		},
+		{
+			name:    "packages unknown trailing flag",
+			command: "packages",
+			args:    []string{"--prefix", "github.com/liza-mas/", "--unknown"},
+		},
+		{
+			name:    "packages stray positional before prefix",
+			command: "packages",
+			args:    []string{"stray", "--prefix", "github.com/liza-mas/"},
+		},
+		{
+			name:    "packages stray positional after prefix",
+			command: "packages",
+			args:    []string{"--prefix", "github.com/liza-mas/", "stray"},
+		},
+		{
+			name:    "packages wrong query flag",
+			command: "packages",
+			args:    []string{"--name", "Supervisor"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := traversaltest.LoadSharedFixture(t)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			args := []string{test.command, "--index", fixture.IndexPath}
+			args = append(args, test.args...)
+
+			status := run(args, &stdout, &stderr)
+
+			if status != runtimecontract.StatusUsage {
+				t.Fatalf("%s invalid args status = %d, want %d; stdout = %q; stderr = %q", test.command, status, runtimecontract.StatusUsage, stdout.String(), stderr.String())
+			}
+			if stdout.String() != "" {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+			if stderr.String() == "" {
+				t.Fatal("stderr is empty, want usage diagnostic")
+			}
+		})
+	}
 }
 
 func TestRunProductionSymbolsMissingNameRemainsUsageFailure(t *testing.T) {
