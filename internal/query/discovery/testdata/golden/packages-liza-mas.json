@@ -1,0 +1,18 @@
+{
+  "packages": [
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "github.com/liza-mas/liza",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod github.com/liza-mas/liza ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "github.com/liza-mas/scip-search",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod github.com/liza-mas/scip-search ."
+    }
+  ]
+}

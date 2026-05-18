@@ -1,0 +1,39 @@
+[
+  {
+    "desc": "`scip-search` maintainers have README installation guidance and maintainer release validation commands that enumerate every supported distribution workflow and verify installs only through `--version`.",
+    "done_when": "README and maintainer validation documentation are updated so the README installation section documents latest-release install, explicit `VERSION=<release>`, `BRANCH=<branch>`, custom `INSTALL_DIR=<directory>`, local clone `make install`, Go and make as caller-provided source prerequisites, separate language-indexer prerequisites for SCIP index generation, `scip-search --version` verification for all workflows, direct `<INSTALL_DIR>/scip-search --version` custom-directory verification, and no unsupported package manager, signing, hosted release setup, query command, SCIP index, language indexer execution, traversal fixture, or query golden JSON validation path.",
+    "scope": "In scope: `README.md#installation`, wording that separates installing `scip-search` from installing language indexers, source prerequisite notes for `BRANCH` and local clone workflows, custom install directory verification guidance, and a new maintainer-facing distribution validation document such as `docs/release-validation.md` that lists latest release, explicit `VERSION`, custom `INSTALL_DIR`, `BRANCH`, local clone `make install`, and `--version` validation command sequences. Out of scope: changing installer behavior, source build behavior, version output formatting, release artifact hosting, release approval or changelog policy, signing or notarization, package manager docs, query command documentation, query validation, SCIP traversal validation, real language indexer execution, and packaging test implementation.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-195906-epic-planning-5-architecture-code-planning-3.md",
+    "task_depends_on": [
+      "epic-planning-5-architecture-code-planning-0",
+      "epic-planning-5-architecture-code-planning-1",
+      "epic-planning-5-architecture-code-planning-2"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can fail fast when README installation examples or maintainer validation commands drift from the supported distribution command surface.",
+    "done_when": "Documentation drift tests pass by inspecting README installation guidance and maintainer validation documentation, asserting the documented command surface includes latest release install, explicit `VERSION=<release>`, `BRANCH=<branch>`, custom `INSTALL_DIR=<directory>`, local clone `make install`, `scip-search --version`, direct custom-directory version verification, Go and make source prerequisite notes, separate language-indexer prerequisite wording, and maintainer validation commands; the tests fail with distribution documentation mismatch diagnostics when required examples are missing, stale, or replaced by query-specific, traversal-specific, real-indexer, package-manager, signing, notarization, hosted-release-setup, or query-golden validation paths.",
+    "scope": "In scope: documentation drift test code, expected supported distribution command-surface fixtures or constants, assertions over `README.md` and maintainer validation docs, and distribution-scoped failure messages for documentation mismatch. Out of scope: implementing or changing installer behavior, source install behavior, `--version` behavior, release/source e2e execution, public network release downloads, query command tests, SCIP index fixtures, traversal fixtures, real language indexer execution, release approval policy, changelog policy, signing, and notarization.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-195906-epic-planning-5-architecture-code-planning-3.md",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can run one distribution validation command set that covers release install, source install, custom install directory, actionable failure signals, docs drift, and `--version` proof without invoking query or traversal validation.",
+    "done_when": "A maintainer-facing distribution validation command, such as `make validate-distribution`, passes by running distribution-scoped packaging checks for release install, explicit `VERSION`, custom `INSTALL_DIR`, branch source install, local clone `make install`, installed-executable `--version` verification, release/source/custom-install failure diagnostics, and documentation drift; when a covered check fails, its output identifies a distribution validation category rather than a query runtime category, and the command set does not require generated SCIP indexes, real language indexer execution, query-specific fixtures, traversal fixtures, query golden JSON, unsupported package managers, signing, notarization, hosted release setup, or release approval policy.",
+    "scope": "In scope: a maintainer-facing validation target or script, wiring to the existing or planned release installer e2e tests from `epic-planning-5-architecture-code-planning-1`, source install e2e tests from `epic-planning-5-architecture-code-planning-2`, `--version` executable smoke coverage from `epic-planning-5-architecture-code-planning-0`, documentation drift tests from Task 2, and packaging-level failure labels or diagnostics. Out of scope: changing release installer internals, source installer internals, `--version` formatting, README copy except consuming Task 1 documentation, adding query/traversal validation, executing real language indexers, public hosted release setup, release approval gates, changelog policy, signing, notarization, and package manager validation.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-195906-epic-planning-5-architecture-code-planning-3.md",
+    "depends_on": [
+      "1"
+    ],
+    "task_depends_on": [
+      "epic-planning-5-architecture-code-planning-0-coding-1-after-version-implementation",
+      "epic-planning-5-architecture-code-planning-1-coding-2",
+      "epic-planning-5-architecture-code-planning-2"
+    ]
+  }
+]

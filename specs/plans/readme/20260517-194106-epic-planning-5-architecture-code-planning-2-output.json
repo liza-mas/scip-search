@@ -1,0 +1,35 @@
+[
+  {
+    "desc": "`scip-search` source builders can run `make install` from a local clone and install the current checkout as a runnable source-built `scip-search` executable with caller-provided Go and make.",
+    "done_when": "Makefile/source-install tests pass asserting `make install` checks for caller-provided Go, builds the current checkout instead of selecting a release artifact, installs an executable `scip-search` at the make-selected install path, reports successful local source install only after the executable exists, passes source provenance into `scip-search --version`, verifies the installed executable from outside the clone directory, and fails nonzero without a success claim for missing Go, build failure, or install failure.",
+    "scope": "In scope: `Makefile` source install target behavior, caller PATH Go prerequisite check inside the make-driven source workflow, current-checkout build command, install directory/path handling for local source installs, source provenance build metadata handoff to the existing version boundary, local source install diagnostics, and colocated tests for success, missing Go, build failure, install failure, executable mode, and outside-clone verification. Out of scope: release artifact lookup or download, `install.sh` `BRANCH` selection, missing make before make can run except documenting that it is a caller prerequisite, exact `--version` formatting beyond source provenance observability, query command execution, SCIP index loading, language indexer installation, README documentation, release validation docs, packaging-wide drift checks, Go installation, and make installation.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-194106-epic-planning-5-architecture-code-planning-2.md",
+    "task_depends_on": [
+      "epic-planning-5-architecture-code-planning-0-coding-0-after-runtime-shell"
+    ]
+  },
+  {
+    "desc": "`scip-search` source builders can run the installer with `BRANCH=<branch>` and receive an installed source-built executable from that requested branch or a nonzero actionable source-install failure.",
+    "done_when": "Installer source-workflow tests pass asserting non-empty `BRANCH` selects a source build path requiring caller-provided Go and make, an available branch is fetched or checked out into controlled temporary source, the branch source is built and installed as executable `scip-search` through the shared source install boundary, success output identifies the installed executable path and branch/source provenance, the installed executable verifies with `--version` outside the source checkout, and missing Go, missing make, unavailable branch, build failure, or install failure exit nonzero without claiming success, provisioning host tools, or falling back to release artifacts.",
+    "scope": "In scope: extending `install.sh` with `BRANCH` source workflow selection, source prerequisite checks for Go and make, branch retrieval/checkout failure handling, invocation of the shared source build/install path, temporary source checkout cleanup expectations, source install success output, source provenance handoff, and installer tests for successful branch install plus missing Go, missing make, unavailable branch, build failure, install failure, and release-fallback prevention. Out of scope: release-mode latest or `VERSION` selection except preserving existing behavior from `epic-planning-5-architecture-code-planning-1`, local clone `make install` internals except consuming the source install boundary from Task 1, hosted release setup, cross-compilation, package manager formulas, Go or make installation, language indexer installation, SCIP indexes, query command execution, README documentation, release validation command docs, and packaging-wide drift checks.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-194106-epic-planning-5-architecture-code-planning-2.md",
+    "depends_on": [
+      "0"
+    ],
+    "task_depends_on": [
+      "epic-planning-5-architecture-code-planning-1-coding-1"
+    ]
+  },
+  {
+    "desc": "`scip-search` maintainers can validate branch installer and local clone source installs end to end with controlled source checkouts using `--version` as the executable proof and no query or SCIP-index dependencies.",
+    "done_when": "End-to-end source install tests pass from temporary directories with controlled source repositories, covering local clone `make install`, `BRANCH=<branch>` installer install, missing Go, missing make, unavailable branch, build failure, and install failure; success cases assert the installed executable exists, is executable, runs outside the source checkout with `--version`, and reports source provenance rather than release identity, while failure cases assert nonzero status, actionable diagnostics, no success claim, no host Go/make provisioning, no release artifact fallback, and no SCIP index, language indexer, or query command execution.",
+    "scope": "In scope: black-box or integration tests for source installation through `make install` and `install.sh BRANCH`, controlled temporary source repositories, direct installed-executable `--version` verification outside the source checkout, failure-path process status and diagnostic assertions, and isolation from release artifacts, SCIP indexes, language indexers, and query commands. Out of scope: implementing Makefile or installer internals, release install e2e coverage, README drift checks or maintainer validation command docs, query fixtures, traversal fixtures, real language indexer execution, package manager validation, signing, notarization, and release approval policy.",
+    "spec_ref": "README.md#installation",
+    "plan_ref": "specs/plans/readme/20260517-194106-epic-planning-5-architecture-code-planning-2.md",
+    "depends_on": [
+      "1"
+    ]
+  }
+]

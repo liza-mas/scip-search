@@ -1,0 +1,13 @@
+[
+  {
+    "desc": "`scip-search` maintainers can validate symbol and package discovery through normal SCIP loading and traversal using deterministic fixtures and command-specific golden JSON cases for matching, filtering, empty results, identities, and stable ordering.",
+    "done_when": "Fixture-backed validation tests pass for `symbols --name Supervisor`, `symbols --name Run`, `symbols --name DoesNotExist`, unfiltered `packages`, `packages --prefix github.com/liza-mas/`, `packages --prefix github.com/liza-mas/scip-search`, and `packages --prefix github.com/no-match/`, invoking the normal SCIP loading and traversal path, parsing stdout JSON into values, comparing command-specific golden payloads, asserting stable `symbols` array order by exact full `symbol`, stable `packages` array order by exact `packageKey`, exact full symbol preservation, symbol match context and package identity fields, package de-duplication, package prefix filtering over `packageName` only, explicit empty result collections, and no assertions for shared runtime failures, stderr diagnostics, reference or implementation payloads, alternate output formats, or JSON object field order.",
+    "scope": "In scope: query-specific deterministic discovery fixture data, command-specific golden JSON files for successful symbol and package discovery cases, validation tests that invoke the normal loaded-index command path and compare parsed JSON values, symbol cases for `Supervisor`, `Run`, and `DoesNotExist`, package cases for unfiltered listing, `github.com/liza-mas/`, `github.com/liza-mas/scip-search`, and `github.com/no-match/`, stable array ordering assertions, exact symbol and package identity payload assertions, and reuse of shared traversal fixture mechanics when present. Out of scope: shared command routing implementation, shared `--index` handling implementation, shared index-loading or malformed-index failure fixtures, raw SCIP traversal fixture construction ownership, symbol query implementation, package query implementation, reference or implementation query fixtures, large real-world fixtures, performance benchmarks, external indexer installation, ctags fallback data, alternate output formats, object field order assertions, source-file reads, package registry behavior, dependency graph behavior, fuzzy, regex, glob, semantic, case-folded, or cross-index matching.",
+    "spec_ref": "README.md#scip-symbol-format",
+    "plan_ref": "specs/plans/readme/20260517-192848-epic-planning-3-architecture-code-planning-3-replacement.md",
+    "task_depends_on": [
+      "epic-planning-3-architecture-code-planning-1-replacement-coding-0",
+      "epic-planning-3-architecture-code-planning-2-replacement-coding-0"
+    ]
+  }
+]

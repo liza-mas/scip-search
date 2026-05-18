@@ -1,0 +1,19 @@
+{
+  "symbol": "scip-go gomod example.com/fixture . pkg/Impl#",
+  "implementations": [
+    {
+      "implementationSymbol": "scip-go gomod example.com/fixture . cmd/Alpha().",
+      "relationship": {
+        "sourceSymbol": "scip-go gomod example.com/fixture . cmd/Alpha().",
+        "targetSymbol": "scip-go gomod example.com/fixture . pkg/Impl#",
+        "isImplementation": true
+      },
+      "documentPath": "cmd/alpha.go",
+      "range": [
+        2,
+        6,
+        11
+      ]
+    }
+  ]
+}

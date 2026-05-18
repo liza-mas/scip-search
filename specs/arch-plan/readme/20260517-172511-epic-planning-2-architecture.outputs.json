@@ -1,0 +1,33 @@
+[
+  {
+    "desc": "`scip-search` has a reusable traversal view that accepts the shared runtime loaded-index boundary, preserves official SCIP document, symbol, occurrence, source-location, role, and hover metadata facts, and exposes them to query planners without command-specific behavior.",
+    "done_when": "Query planners can build a traversal view from the runtime loaded official SCIP index and enumerate index metadata, every document, every document-level symbol, every external symbol, and every occurrence exactly as process-local traversal facts; each occurrence fact retains its containing document path and position encoding plus SCIP range, optional enclosing range presence/absence, role bitset, and override documentation; each symbol fact retains full SCIP symbol string, local/external source, kind, display name, documentation entries, signature documentation, and enclosing symbol metadata; traversal does not read source files, open index paths, write process streams, persist derived data, or define any command-specific matching or JSON result behavior.",
+    "scope": "In scope: `internal/traversal` accepts the shared runtime loaded SCIP boundary, uses official SCIP Go binding data as source truth, builds process-local inventories for index metadata, documents, document symbols, external symbols, and occurrences, and exposes document paths, languages, position encodings, occurrence ranges, enclosing-range absence/presence, symbol-role bitsets, symbol kind, display name, documentation, signature documentation, enclosing symbol metadata, and occurrence override documentation. Out of scope: raw path loading, command routing, stdout/stderr/status behavior, query-specific matching or filtering, final CLI JSON schemas, source-file reads, custom persisted formats, daemon/watch/cache behavior, relationship lookup indexes, fixture authoring, and ctags fallback behavior.",
+    "spec_ref": "README.md#language-support",
+    "arch_ref": "specs/arch-plan/readme/20260517-172511-epic-planning-2-architecture.md",
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-1"
+    ]
+  },
+  {
+    "desc": "`scip-search` traversal exposes reusable lookup views for exact-symbol occurrences and SCIP relationships so reference, definition, implementation, and related-symbol planners can query traversal facts without scanning raw documents or symbol information.",
+    "done_when": "Given a traversal view from Scope 1, query planners can request all occurrences for an exact full SCIP symbol and receive every matching occurrence with document context, source-location metadata, role bitset, and hover override metadata preserved; planners can request relationships owned by an exact full SCIP symbol and relationships targeting an exact full SCIP symbol and receive relationship facts preserving owner/source symbol, target symbol, original direction, and every SCIP relationship edge-kind flag; lookups for absent symbols return empty traversal results without deciding command-level missing-symbol behavior; traversal does not synthesize relationships or define final reference, implementation, definition, grouping, duplicate, ordering, or JSON semantics.",
+    "scope": "In scope: symbol-keyed occurrence lookup for exact full SCIP symbols, relationship fact extraction from document-level and external symbol information, relationship lookup by owner/source symbol, relationship lookup by target symbol, and preservation of source symbol, target symbol, original direction, and all SCIP edge-kind flags including reference, implementation, type-definition, and definition. Out of scope: partial symbol resolution, package-prefix filtering, reference or implementation query algorithms, missing-symbol command behavior, synthesized relationships, cross-index lookup, duplicate elimination policy, result grouping, response ordering, final JSON schemas, and fixture authoring.",
+    "spec_ref": "README.md#language-support",
+    "arch_ref": "specs/arch-plan/readme/20260517-172511-epic-planning-2-architecture.md",
+    "depends_on": [
+      "0"
+    ]
+  },
+  {
+    "desc": "`scip-search` has deterministic schema-valid traversal fixtures and coverage validation proving the shared traversal view exposes the SCIP data categories needed by downstream query planners.",
+    "done_when": "Maintainer tests can load the shared fixture set through the same official SCIP binding path used by traversal, build the traversal view, and prove at least two documents with distinct relative paths, document language and position encoding, at least one document-level symbol, at least one external symbol, occurrences for more than one full SCIP symbol, empty lookup behavior for an absent symbol, same-line and multi-position range forms, present and absent enclosing ranges, definition and non-definition occurrences, a multi-bit role occurrence, symbol kind/display name/documentation/signature documentation, present and absent occurrence override documentation, relationship owner and target lookup, original relationship direction, and reference, implementation, definition, and type-definition edge-kind flags; coverage failures identify the missing traversal category and do not assert command JSON, stdout/stderr, exit status, or query-specific semantics.",
+    "scope": "In scope: compact deterministic schema-valid SCIP fixture payloads loaded through the official binding path; fixture helper accessors under traversal-owned test boundaries; coverage validation for documents, languages, paths, position encodings, local symbols, external symbols, occurrences, exact-symbol lookup, relationship owner and target lookup, same-line and multi-position ranges, enclosing range presence/absence, definition and non-definition role cases, multi-bit roles, relationship edge-kind flags, symbol hover metadata, signature documentation, and occurrence override documentation. Out of scope: installing or invoking external indexers, large real-world fixtures, performance benchmarks, ctags fallback fixtures, command-specific fixtures, final command JSON golden files, stdout/stderr/status validation, and query-specific selection or grouping behavior.",
+    "spec_ref": "README.md#language-support",
+    "arch_ref": "specs/arch-plan/readme/20260517-172511-epic-planning-2-architecture.md",
+    "depends_on": [
+      "0",
+      "1"
+    ]
+  }
+]

@@ -1,0 +1,19 @@
+[
+  {
+    "desc": "`scip-search` has a shared Go CLI runtime shell that routes the four documented query commands, enforces the common `--index` invocation contract, provides one-shot process execution, and centralizes stdout/stderr/status behavior without implementing SCIP traversal.",
+    "done_when": "The Go project baseline supports the existing pre-commit Go hooks, every documented query command is recognized through one shared runtime path, missing or unsupported commands and missing `--index` inputs fail with status `2` through stderr only, valid routed invocations call an injected loader and query handler exactly once for one selected command, successful handler results are emitted as one parseable JSON value on stdout with empty stderr and status `0`, and no query-specific traversal or result schema is defined.",
+    "scope": "In scope: Go module and validation baseline required by existing hooks, `scip-search` entrypoint, documented command routing for `symbols`, `references`, `implementations`, and `packages`, required shared `--index` flag parsing, usage failure classification, one-shot lifecycle, status constants, JSON success writer, stderr-only runtime diagnostics, and an injected no-traversal query handler boundary. Out of scope: official SCIP parsing, filesystem index validation beyond invoking the loader boundary, query-specific flags, symbol/package/reference/implementation traversal, query-specific result fields, version/install/release behavior, daemon/watch/MCP/UI behavior, and custom index formats.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "arch_ref": "specs/arch-plan/readme/20260517-170052-epic-planning-1-architecture.md"
+  },
+  {
+    "desc": "`scip-search` has a caller-selected SCIP index loading boundary that validates the supplied `--index` path, parses readable SCIP input through official Go bindings, reports shared index-loading failures consistently, and exposes loaded context to query handlers before traversal-specific work begins.",
+    "done_when": "For `symbols`, `references`, `implementations`, and `packages`, nonexistent, unreadable, directory, and invalid SCIP inputs fail before query handlers run with empty stdout, diagnostic stderr, and status `3`; readable valid SCIP input is parsed through the official SCIP Go binding boundary and passed as the only loaded context for the current invocation; selected index files are never generated, searched for, updated, deleted, cached, or parsed as a custom format.",
+    "scope": "In scope: caller-selected index path validation after shared invocation succeeds, official SCIP Go binding load/parse boundary, loaded query context handoff to the selected command handler, index-loading diagnostics, status `3`, and cross-command coverage for missing, unreadable, directory, invalid, and valid SCIP inputs. Out of scope: generating, updating, caching, watching, compiling, type-checking, fallback ctags parsing, custom index formats, query traversal, query-specific result schemas, and release/install behavior.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "arch_ref": "specs/arch-plan/readme/20260517-170052-epic-planning-1-architecture.md",
+    "depends_on": [
+      "0"
+    ]
+  }
+]

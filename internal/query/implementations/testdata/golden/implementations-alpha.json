@@ -1,0 +1,4 @@
+{
+  "symbol": "scip-go gomod example.com/fixture . cmd/Alpha().",
+  "implementations": []
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "desc": "`scip-search` has a production `internal/scipindex` loader that validates the caller-selected path, reads only that file, parses SCIP bytes through the official Go bindings, and returns a loaded runtime context or an index-loading failure.",
+    "done_when": "Unit tests for `internal/scipindex` pass asserting nonexistent paths, directory paths, injected unreadable file-open errors, and readable invalid bytes all return the shared index-loading failure class without calling query handlers, mutating the selected path, searching fallback locations, or attempting custom-format parsing; a readable valid temp `.scip` file generated with `github.com/scip-code/scip/bindings/go/scip` and `google.golang.org/protobuf/proto` parses successfully into the loaded context with the caller-selected path preserved and official SCIP index data available.",
+    "scope": "In scope: `internal/scipindex` production loader, minimal runtime loaded-index context type or adapter needed by the existing loader interface, Go module dependency updates for the official SCIP binding and protobuf APIs, and colocated loader unit tests with temp files plus an injected unreadable-open test double. Out of scope: shared command routing, shared `--index` parsing, process entrypoint behavior, query-specific flags, query traversal, query result schemas, generated index fixtures, fallback ctags parsing, default index discovery, caching, watching, compilation, type-checking, release/install behavior, and README changes.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/scip-index-loading-boundary.md",
+    "plan_ref": "specs/plans/readme/20260517-192724-epic-planning-1-architecture-code-planning-1.md",
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-0"
+    ]
+  },
+  {
+    "desc": "`scip-search` routes the selected `--index` path through the production SCIP loader after shared invocation validation, reports every loader failure as status `3` through stderr only, and calls only the selected query handler with the loaded context on successful load.",
+    "done_when": "Unit tests in `internal/cli` pass for `symbols`, `references`, `implementations`, and `packages` asserting loader failures representing nonexistent, unreadable, directory, and invalid SCIP inputs return status `3`, write a diagnostic only to stderr, leave stdout empty, and do not call any query handler; successful loads call only the selected handler exactly once with the loaded context from the loader and emit the handler result through the existing JSON success path; tests also assert the runtime does not search for, generate, update, delete, cache, or replace the selected index path.",
+    "scope": "In scope: `internal/cli` production loader integration, loader-error to `StatusIndexLoad` mapping, diagnostic propagation, handler-not-called assertions for loader failures, loaded context handoff to the selected handler, and unit tests using loader and handler fakes. Out of scope: implementing the loader itself, shared command routing or shared `--index` parsing already owned by the prior runtime shell plan, query-specific argument validation, SCIP traversal, query result schemas, fallback ctags parsing, default index discovery, caching, watching, compilation, type-checking, release/install behavior, and README changes.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/stderr-exit-error-contract.md",
+    "plan_ref": "specs/plans/readme/20260517-192724-epic-planning-1-architecture-code-planning-1.md",
+    "depends_on": [
+      "0"
+    ],
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-0"
+    ]
+  },
+  {
+    "desc": "`scip-search` has end-to-end command coverage proving the production runtime reports index-loading failures and valid SCIP loads consistently for `symbols`, `references`, `implementations`, and `packages`.",
+    "done_when": "Command-level tests pass by invoking the `scip-search` entrypoint or testable run adapter for each documented command and asserting nonexistent, directory, and invalid selected index paths produce empty stdout, non-empty diagnostic stderr, and status `3`; unreadable selected index behavior is covered for each documented command through the same runtime path with a deterministic loader-open failure; valid temp `.scip` inputs generated through the official SCIP Go binding reach the query handler boundary and produce parseable JSON success with status `0` and empty stderr; `go test ./...` passes.",
+    "scope": "In scope: black-box or entrypoint-level tests under `cmd/scip-search`, test helpers for generating minimal valid SCIP temp files through official bindings, deterministic unreadable-open coverage through the existing runtime injection point when OS permissions are not portable, and full-package `go test ./...` validation. Out of scope: adding query traversal assertions, defining query-specific JSON fields, invoking language indexers, committing generated binary indexes, default index lookup, caching, watching, compilation, type-checking, install/version behavior, and README changes.",
+    "spec_ref": "specs/stories/readme/20260517-095535-epic-planning-1/shared-runtime-error-cases.md",
+    "plan_ref": "specs/plans/readme/20260517-192724-epic-planning-1-architecture-code-planning-1.md",
+    "depends_on": [
+      "1"
+    ],
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-0"
+    ]
+  },
+  {
+    "desc": "`scip-search` README documents the caller-selected SCIP index loading contract, including status `3` failure cases and the official binding boundary, without documenting traversal behavior or query-specific result schemas.",
+    "done_when": "README changes document that every documented query command reads only the caller-supplied `--index` file, nonexistent, unreadable, directory, and invalid SCIP inputs fail before query execution with empty stdout, diagnostic stderr, and status `3`, valid SCIP inputs are loaded through the official SCIP Go bindings before the selected query handler runs, and `scip-search` never generates, searches for, updates, deletes, caches, watches, compiles, type-checks, or parses custom index formats for the selected index; no query-specific result fields, traversal semantics, install/version behavior, or ctags fallback behavior are added; documentation pre-commit checks pass for `README.md`.",
+    "scope": "In scope: README user-facing notes for explicit index loading, status `3` shared loading failures, official SCIP Go binding load boundary, and excluded index side effects. Out of scope: code changes, query-specific result schema documentation, symbol/package/reference/implementation traversal docs, install/version/release docs, ctags fallback docs, and language indexer installation guidance beyond existing README content.",
+    "spec_ref": "README.md#what-is-scip-search",
+    "plan_ref": "specs/plans/readme/20260517-192724-epic-planning-1-architecture-code-planning-1.md",
+    "depends_on": [
+      "2"
+    ],
+    "task_depends_on": [
+      "epic-planning-1-architecture-code-planning-0"
+    ]
+  }
+]

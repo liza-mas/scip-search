@@ -1,0 +1,27 @@
+{
+  "symbol": "scip-go gomod example.com/fixture . pkg/Beta#",
+  "references": [
+    {
+      "symbol": "scip-go gomod example.com/fixture . cmd/Alpha().",
+      "documentPath": "cmd/alpha.go",
+      "range": [
+        8,
+        1,
+        8,
+        15
+      ],
+      "roles": 8
+    },
+    {
+      "symbol": "scip-go gomod example.com/fixture . pkg/Beta#",
+      "documentPath": "pkg/beta.go",
+      "range": [
+        12,
+        4,
+        14,
+        2
+      ],
+      "roles": 8
+    }
+  ]
+}

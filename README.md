@@ -57,7 +57,7 @@ scip-go gomod github.com/liza-mas/liza . agent/Doer#
 
 **`scip-search`** is a thin Go binary that:
 
-1. Loads a SCIP index file at the path provided as argument
+1. Loads a SCIP index file at the path provided with `--index`
 2. Answers a query using the SCIP Go bindings
 3. Prints structured JSON to stdout
 4. Exits
@@ -65,6 +65,8 @@ scip-go gomod github.com/liza-mas/liza . agent/Doer#
 Cold start is milliseconds — loads a pre-built binary index, performs no compilation or type-checking.
 
 ```bash
+scip-search --help
+scip-search --version
 scip-search symbols --index <index-path> --name <name>
 scip-search references --index <index-path> --symbol <scip-symbol>
 scip-search implementations --index <index-path> --symbol <scip-symbol>
@@ -78,6 +80,22 @@ scip-search references --index /path/to/go.scip --symbol 'scip-go gomod github.c
 scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod github.com/liza-mas/liza . agent/Doer#'
 scip-search packages --index /path/to/go.scip
 ```
+
+### Runtime Contract
+
+All query commands require `--index <index-path>`.
+
+`scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
+
+When a query command succeeds, `scip-search` writes exactly one JSON value to stdout, writes nothing to stderr, and exits with status `0`.
+
+Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
+
+After the shared runtime accepts an index path, every documented query command reads only the caller-supplied `--index` file for the current invocation. `scip-search` does not search for a default index, generate an index, update or delete the selected index, cache it for later runs, watch it for changes, compile or type-check source code, or parse a custom index format.
+
+Index-loading failures happen before the selected query handler runs. A nonexistent path, unreadable file, directory path, or readable file that is not valid SCIP input leaves stdout empty, writes a human-readable diagnostic to stderr, and exits with status `3`.
+
+Valid SCIP input is loaded through the official SCIP Go bindings before the selected query handler runs. This loading boundary does not define query result fields or traversal behavior.
 
 ### Language Support
 
@@ -126,36 +144,45 @@ Handles multiple languages natively by file extension — no per-language invoca
 
 ### Prerequisites
 
-Install the appropriate language indexers listed in [Existing Indexers](#existing-indexers) before generating SCIP indexes for `scip-search`.
+Installing `scip-search` only installs the `scip-search` CLI.
+
+Language indexers are separate tools used to generate SCIP indexes before
+running query commands. Install the appropriate indexers listed in
+[Existing Indexers](#existing-indexers) when you need to create SCIP data; they
+are not installed by the `scip-search` installer.
 
 **Quick install (latest release, macOS/Linux):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | bash
+scip-search --version
 ```
 
 **Options:**
 
 ```bash
-# Specific version
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | VERSION=v1.0.0 bash
+# Explicit release
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | VERSION=<release> bash
+scip-search --version
 
-# Build from a branch (requires Go and make)
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | BRANCH=main bash
+# Build from a branch with caller-provided Go and make
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | BRANCH=<branch> bash
+scip-search --version
 
-# Custom directory
-curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | INSTALL_DIR=~/.local/bin bash
+# Custom install directory
+curl -fsSL https://raw.githubusercontent.com/liza-mas/scip-search/main/install.sh | INSTALL_DIR=<directory> bash
+<directory>/scip-search --version
 ```
 
 **From a local clone:**
 
 ```bash
-git clone https://github.com/liza-mas/scip-search.git && cd scip-search
+git clone https://github.com/liza-mas/scip-search.git
+cd scip-search
 make install
-```
-
-**Verify:**
-
-```bash
 scip-search --version
 ```
+
+Local clone installs also require caller-provided Go and make. Use
+`INSTALL_DIR=<directory> make install` to install from a local clone into a
+custom directory, then verify with `<directory>/scip-search --version`.
