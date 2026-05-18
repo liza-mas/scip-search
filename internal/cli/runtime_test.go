@@ -102,6 +102,41 @@ func TestRunWithUnsupportedCommandReturnsUsageBeforeLoaderOrHandlers(t *testing.
 	assertNoHandlerCalls(t, handlers)
 }
 
+func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
+	t.Parallel()
+
+	loader := &recordingLoader{}
+	handlers := newRecordingHandlers()
+	cliRuntime := NewRuntime(loader, handlers)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := cliRuntime.Run([]string{"--help"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("Run(--help) status = %d, want %d", status, runtimecontract.StatusOK)
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	for _, want := range []string{
+		"Usage:",
+		"scip-search symbols --index <index-path> --name <name>",
+		"scip-search references --index <index-path> --symbol <scip-symbol>",
+		"scip-search implementations --index <index-path> --symbol <scip-symbol>",
+		"scip-search packages --index <index-path> [--prefix <prefix>]",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
+		}
+	}
+	if loader.calls != 0 {
+		t.Fatalf("loader calls = %d, want 0", loader.calls)
+	}
+	assertNoHandlerCalls(t, handlers)
+	assertNotQueryJSON(t, stdout.String())
+}
+
 func TestRunVersionBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 	t.Parallel()
 

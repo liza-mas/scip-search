@@ -65,6 +65,8 @@ scip-go gomod github.com/liza-mas/liza . agent/Doer#
 Cold start is milliseconds — loads a pre-built binary index, performs no compilation or type-checking.
 
 ```bash
+scip-search --help
+scip-search --version
 scip-search symbols --index <index-path> --name <name>
 scip-search references --index <index-path> --symbol <scip-symbol>
 scip-search implementations --index <index-path> --symbol <scip-symbol>
@@ -82,6 +84,8 @@ scip-search packages --index /path/to/go.scip
 ### Runtime Contract
 
 All query commands require `--index <index-path>`.
+
+`scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
 When a query command succeeds, `scip-search` writes exactly one JSON value to stdout, writes nothing to stderr, and exits with status `0`.
 

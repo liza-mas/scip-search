@@ -76,6 +76,36 @@ func TestRunSharedInvocationFailuresUseCLIStreamsAndStatus(t *testing.T) {
 	}
 }
 
+func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"--help"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("run(--help) status = %d, want %d", status, runtimecontract.StatusOK)
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	for _, want := range []string{
+		"Usage:",
+		"scip-search symbols --index <index-path> --name <name>",
+		"scip-search references --index <index-path> --symbol <scip-symbol>",
+		"scip-search implementations --index <index-path> --symbol <scip-symbol>",
+		"scip-search packages --index <index-path> [--prefix <prefix>]",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
+		}
+	}
+	if strings.HasPrefix(strings.TrimSpace(stdout.String()), "{") {
+		t.Fatalf("stdout = %q, want non-JSON help output", stdout.String())
+	}
+}
+
 func TestRunVersionUsesBuildIdentityBeforeQueryValidation(t *testing.T) {
 	t.Parallel()
 

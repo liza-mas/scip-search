@@ -17,6 +17,21 @@ var documentedCommands = []string{
 	"packages",
 }
 
+const helpText = `Usage:
+  scip-search --help
+  scip-search --version
+  scip-search symbols --index <index-path> --name <name>
+  scip-search references --index <index-path> --symbol <scip-symbol>
+  scip-search implementations --index <index-path> --symbol <scip-symbol>
+  scip-search packages --index <index-path> [--prefix <prefix>]
+
+Commands:
+  symbols          Find symbols by literal partial name.
+  references       Find references to an exact SCIP symbol.
+  implementations  Find implementations of an exact SCIP symbol.
+  packages         List package identities in an index.
+`
+
 // Loader is the boundary that later runtime stages use after command selection.
 type Loader interface {
 	Load(indexPath string) (any, error)
@@ -92,6 +107,14 @@ func (rt Runtime) Route(args []string) (RoutedCommand, []string, bool) {
 
 // Run validates shared invocation shape, loads the selected index, and executes one handler.
 func (rt Runtime) Run(args []string, stdout io.Writer, stderr io.Writer) runtimecontract.Status {
+	if len(args) > 0 && args[0] == "--help" {
+		if _, err := fmt.Fprint(stdout, helpText); err != nil {
+			return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+		}
+
+		return runtimecontract.StatusOK
+	}
+
 	if len(args) > 0 && args[0] == "--version" {
 		if _, err := fmt.Fprintln(stdout, version.Format(rt.buildIdentity)); err != nil {
 			return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
