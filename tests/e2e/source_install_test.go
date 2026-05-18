@@ -2,11 +2,13 @@ package e2e_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -43,6 +45,93 @@ func TestSourceBranchInstallEndToEndUnavailableBranchIsActionable(t *testing.T) 
 
 	result.requireFailure(t)
 	result.requireDiagnostic(t, "BRANCH=missing-source-branch")
+	harness.requireNoInstalledBinary(t)
+	harness.requireNoReleaseFallback(t)
+}
+
+func TestSourceBranchInstallEndToEndMissingGoFailsBeforeProvisioning(t *testing.T) {
+	t.Parallel()
+
+	harness := newSourceBranchE2EHarness(t)
+	harness.addReleaseFallbackArtifact(t, "v9.9.9")
+
+	result := harness.runInstaller(t, map[string]string{
+		"BRANCH":  "source-missing-go",
+		"PATH":    harness.pathDir,
+		"VERSION": "v9.9.9",
+	})
+
+	result.requireFailure(t)
+	result.requireDiagnostic(t, "Go is required")
+	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
+	harness.requireNoInstalledBinary(t)
+	harness.requireNoReleaseFallback(t)
+}
+
+func TestSourceBranchInstallEndToEndMissingMakeFailsBeforeProvisioning(t *testing.T) {
+	t.Parallel()
+
+	harness := newSourceBranchE2EHarness(t)
+	harness.addReleaseFallbackArtifact(t, "v9.9.9")
+	harness.writeTool(t, "go", "#!/bin/sh\nexit 0\n")
+
+	result := harness.runInstaller(t, map[string]string{
+		"BRANCH":  "source-missing-make",
+		"PATH":    harness.pathDir,
+		"VERSION": "v9.9.9",
+	})
+
+	result.requireFailure(t)
+	result.requireDiagnostic(t, "make is required")
+	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
+	harness.requireNoInstalledBinary(t)
+	harness.requireNoReleaseFallback(t)
+}
+
+func TestSourceBranchInstallEndToEndBuildFailureDoesNotFallback(t *testing.T) {
+	t.Parallel()
+
+	harness := newSourceBranchE2EHarness(t)
+	branch := "source-build-fails"
+	harness.createControlledBranch(t, branch)
+	harness.replaceControlledMakefile(t, branch, "install:\n\t@printf 'controlled source build failure\\n' >&2\n\t@exit 73\n")
+	harness.addReleaseFallbackArtifact(t, "v9.9.9")
+
+	result := harness.runInstaller(t, map[string]string{
+		"BRANCH":  branch,
+		"VERSION": "v9.9.9",
+	})
+
+	result.requireFailure(t)
+	result.requireDiagnostic(t, "source install failed")
+	result.requireDiagnostic(t, "BRANCH="+branch)
+	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
+	harness.requireNoInstalledBinary(t)
+	harness.requireNoReleaseFallback(t)
+}
+
+func TestSourceBranchInstallEndToEndInstallFailureDoesNotFallback(t *testing.T) {
+	t.Parallel()
+
+	harness := newSourceBranchE2EHarness(t)
+	branch := "source-install-fails"
+	harness.createControlledBranch(t, branch)
+	unusableInstallDir := filepath.Join(harness.root, "not-a-directory")
+	if err := os.WriteFile(unusableInstallDir, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("create unusable install dir sentinel: %v", err)
+	}
+	harness.installDir = unusableInstallDir
+	harness.addReleaseFallbackArtifact(t, "v9.9.9")
+
+	result := harness.runInstaller(t, map[string]string{
+		"BRANCH":  branch,
+		"VERSION": "v9.9.9",
+	})
+
+	result.requireFailure(t)
+	result.requireDiagnostic(t, "source install failed")
+	result.requireDiagnostic(t, "BRANCH="+branch)
+	result.requireNoProvisioningOrOutOfScopeDiagnostics(t)
 	harness.requireNoInstalledBinary(t)
 	harness.requireNoReleaseFallback(t)
 }
@@ -120,6 +209,17 @@ func (h *sourceBranchE2EHarness) createControlledBranch(t *testing.T, branch str
 	return commandOutput(t, h.gitPath, "-C", h.sourceRepo, "rev-parse", "--short", "HEAD")
 }
 
+func (h *sourceBranchE2EHarness) replaceControlledMakefile(t *testing.T, branch, content string) {
+	t.Helper()
+
+	runE2ECommand(t, h.gitPath, "-C", h.sourceRepo, "checkout", "--quiet", branch)
+	if err := os.WriteFile(filepath.Join(h.sourceRepo, "Makefile"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write controlled Makefile: %v", err)
+	}
+	runE2ECommand(t, h.gitPath, "-C", h.sourceRepo, "add", "Makefile")
+	runE2ECommand(t, h.gitPath, "-C", h.sourceRepo, "-c", "user.name=Source E2E", "-c", "user.email=source-e2e@example.invalid", "commit", "--quiet", "-m", "test: controlled source failure")
+}
+
 func (h *sourceBranchE2EHarness) addReleaseFallbackArtifact(t *testing.T, version string) {
 	t.Helper()
 
@@ -139,6 +239,16 @@ exit 64
 	if err := os.WriteFile(h.metadataPath, h.metadataBuffer.Bytes(), 0o644); err != nil {
 		t.Fatalf("write release metadata: %v", err)
 	}
+}
+
+func (h *sourceBranchE2EHarness) writeTool(t *testing.T, name, content string) string {
+	t.Helper()
+
+	path := filepath.Join(h.pathDir, name)
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		t.Fatalf("write tool shim %s: %v", path, err)
+	}
+	return path
 }
 
 func (h *sourceBranchE2EHarness) runInstaller(t *testing.T, env map[string]string) installerResult {
@@ -256,7 +366,7 @@ func (h *sourceBranchE2EHarness) requireNoInstalledBinary(t *testing.T) {
 
 	if _, err := os.Stat(h.installedPath()); err == nil {
 		t.Fatalf("expected no installed scip-search at %s", h.installedPath())
-	} else if !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
 		t.Fatalf("stat installed scip-search: %v", err)
 	}
 }
@@ -281,6 +391,34 @@ func (r installerResult) requireSourceBranchSuccessOutput(t *testing.T, installe
 	}
 	if strings.Contains(r.stdout, "release") {
 		t.Fatalf("success output claimed release provenance:\n%s", r.stdout)
+	}
+}
+
+func (r installerResult) requireNoProvisioningOrOutOfScopeDiagnostics(t *testing.T) {
+	t.Helper()
+
+	combined := r.stdout + r.stderr
+	for _, forbidden := range []string{
+		"apt",
+		"apk",
+		"brew",
+		"dnf",
+		"yum",
+		"go install",
+		"make install",
+		"scip-go",
+		"scip-typescript",
+		"scip-python",
+		"rust-analyzer",
+		"--index",
+		"symbols",
+		"references",
+		"implementations",
+		"packages",
+	} {
+		if strings.Contains(combined, forbidden) {
+			t.Fatalf("failure diagnostic referenced provisioning or out-of-scope workflow %q\nstdout:\n%s\nstderr:\n%s", forbidden, r.stdout, r.stderr)
+		}
 	}
 }
 
