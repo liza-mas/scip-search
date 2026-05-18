@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "desc": "Implement references --symbol query through traversal occurrence and relationship lookup, replacing unimplementedHandler with a production handler that returns reference occurrences for an exact SCIP symbol, and add command-level golden tests",
+    "done_when": "scip-search references --index <shared-fixture> --symbol <exact-scip-symbol> exits 0, writes no stderr, and emits a JSON payload with reference occurrences including document paths, ranges, and symbol roles; missing --symbol and empty --symbol value return status 2 usage failures; a symbol with no references returns status 0 with an empty references array; golden JSON tests validate the production command path; references no longer returns 'query execution is not implemented'; make test passes",
+    "scope": "cmd/scip-search/main.go references handler wiring, new internal/query/references package with traversal-backed reference query, golden test files, cmd/scip-search/main_test.go reference command tests. Out of scope: implementations command, discovery package changes, traversal API changes, install scripts, documentation",
+    "spec_ref": "README.md#what-is-scip-search"
+  },
+  {
+    "desc": "Implement implementations --symbol query through incoming implementation relationship lookup, replacing unimplementedHandler with a production handler that returns implementation results for an exact SCIP symbol, and add command-level golden tests",
+    "done_when": "scip-search implementations --index <shared-fixture> --symbol <exact-scip-symbol> exits 0, writes no stderr, and emits a JSON payload with incoming implementation relationships including source symbols and document context; missing --symbol and empty --symbol value return status 2 usage failures; a symbol with no implementations returns status 0 with an empty implementations array; golden JSON tests validate the production command path; implementations no longer returns 'query execution is not implemented'; make test passes",
+    "scope": "cmd/scip-search/main.go implementations handler wiring, new internal/query/implementations package with traversal-backed implementation relationship query, golden test files, cmd/scip-search/main_test.go implementation command tests. Out of scope: references command, discovery package changes, traversal API changes, install scripts, documentation",
+    "spec_ref": "README.md#what-is-scip-search",
+    "depends_on": ["0"]
+  }
+]
