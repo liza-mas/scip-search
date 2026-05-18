@@ -24,6 +24,9 @@ func Packages(view traversal.View, prefix string) (PackagesPayload, error) {
 	byPackageKey := map[string]PackageResult{}
 
 	for _, symbol := range symbolsInView(view) {
+		if scipmodel.IsLocalSymbol(symbol.Symbol) {
+			continue
+		}
 		identity, err := scipmodel.ParseIdentity(symbol.Symbol)
 		if err != nil {
 			return PackagesPayload{}, err

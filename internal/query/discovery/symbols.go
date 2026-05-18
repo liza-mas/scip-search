@@ -42,6 +42,9 @@ func SymbolsByName(view traversal.View, name string) (SymbolsPayload, error) {
 	results := make([]SymbolResult, 0)
 
 	for _, symbol := range symbolsInView(view) {
+		if scipmodel.IsLocalSymbol(symbol.Symbol) {
+			continue
+		}
 		identity, err := scipmodel.ParseIdentity(symbol.Symbol)
 		if err != nil {
 			return SymbolsPayload{}, err

@@ -116,6 +116,43 @@ func TestIdentityMatchTextPrefersDisplayNameAndFallsBackToDescriptor(t *testing.
 	}
 }
 
+func TestIsLocalSymbolIdentifiesSCIPLocalSymbols(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		symbol string
+		want   bool
+	}{
+		{
+			name:   "local symbol",
+			symbol: "local 0",
+			want:   true,
+		},
+		{
+			name:   "package bearing symbol",
+			symbol: "scip-go gomod github.com/liza-mas/liza . supervisor/Run().",
+			want:   false,
+		},
+		{
+			name:   "local prefix without separator",
+			symbol: "locality gomod example.com/pkg . pkg/Foo#",
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsLocalSymbol(tt.symbol); got != tt.want {
+				t.Fatalf("IsLocalSymbol(%q) = %v, want %v", tt.symbol, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseIdentityRejectsSymbolsWithoutDescriptor(t *testing.T) {
 	t.Parallel()
 

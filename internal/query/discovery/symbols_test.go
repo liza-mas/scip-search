@@ -159,6 +159,7 @@ func discoveryFixtureView() traversal.View {
 				{
 					RelativePath: "supervisor/supervisor.go",
 					Symbols: []*scip.SymbolInformation{
+						{Symbol: "local 0", DisplayName: "SupervisorLocal"},
 						{Symbol: supervisorConfigSymbol, DisplayName: "Config"},
 						{Symbol: lowercaseSupervisorSymbol, DisplayName: "supervisor"},
 						{Symbol: supervisorSymbol, DisplayName: "Supervisor"},

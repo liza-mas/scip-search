@@ -66,6 +66,10 @@ func (identity Identity) MatchText(displayName string) string {
 	return identity.Descriptor
 }
 
+func IsLocalSymbol(symbol string) bool {
+	return strings.HasPrefix(symbol, "local ")
+}
+
 func cutSymbolComponent(symbol string) (string, string, bool) {
 	component, rest, found := strings.Cut(symbol, " ")
 	if !found || component == "" || rest == "" {

@@ -230,6 +230,7 @@ func discoveryPackagesFixtureView() traversal.View {
 				{
 					RelativePath: "github.com/liza-mas/scip-search/path-only.go",
 					Symbols: []*scip.SymbolInformation{
+						{Symbol: "local 0", DisplayName: "LocalSymbol"},
 						{Symbol: "scip-go gomod github.com/liza-mas/scip-search . internal/query/Packages().", DisplayName: "Packages"},
 						{Symbol: "scip-go gomod github.com/liza-mas/scip-search . internal/query/Duplicate#"},
 						{Symbol: "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#"},
