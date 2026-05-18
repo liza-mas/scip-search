@@ -21,7 +21,7 @@ const (
 	unrelatedSymbol  = "scip-go gomod example.com/project . pkg/Unrelated#"
 )
 
-func TestQueryReturnsExactAndDirectOutgoingReferenceRelatedNonDefinitionOccurrences(t *testing.T) {
+func TestQueryReturnsExactAndDirectReferenceRelatedNonDefinitionOccurrences(t *testing.T) {
 	t.Parallel()
 
 	result := references.Query(referenceFixtureView(), querySymbol)
@@ -32,10 +32,11 @@ func TestQueryReturnsExactAndDirectOutgoingReferenceRelatedNonDefinitionOccurren
 	gotSymbols := collectReferenceSymbols(result.References)
 	wantSymbols := []string{
 		querySymbol,
+		incomingSymbol,
 		relatedSymbol,
 	}
 	if !slices.Equal(gotSymbols, wantSymbols) {
-		t.Fatalf("reference symbols = %v, want exact and direct outgoing related symbols %v", gotSymbols, wantSymbols)
+		t.Fatalf("reference symbols = %v, want exact and direct related symbols %v", gotSymbols, wantSymbols)
 	}
 	for _, reference := range result.References {
 		if reference.Roles&int32(scip.SymbolRole_Definition) != 0 {
@@ -54,6 +55,7 @@ func TestQueryReturnsStableSourceOrder(t *testing.T) {
 	gotLocations := collectReferenceLocations(result.References)
 	wantLocations := []string{
 		"cmd/query.go:[8 1 8 15]:" + querySymbol,
+		"pkg/incoming.go:[9 0 8]:" + incomingSymbol,
 		"pkg/related.go:[10 2 14]:" + relatedSymbol,
 	}
 	if !slices.Equal(gotLocations, wantLocations) {
@@ -123,6 +125,7 @@ func referenceFixtureView() traversal.View {
 							Relationships: []*scip.Relationship{
 								{Symbol: relatedSymbol, IsReference: true},
 								{Symbol: relatedSymbol, IsReference: true},
+								{Symbol: incomingSymbol, IsReference: true},
 							},
 						},
 					},

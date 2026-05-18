@@ -346,6 +346,24 @@ func TestRunProductionReferencesCommandUsesReferencesImplementation(t *testing.T
 	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-alpha.json")
 }
 
+func TestRunProductionReferencesCommandIncludesIncomingReferenceRelationships(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"references", "--index", fixture.IndexPath, "--symbol", traversaltest.BetaSymbol}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references incoming status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-beta.json")
+}
+
 func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
 	t.Parallel()
 

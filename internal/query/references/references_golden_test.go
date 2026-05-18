@@ -37,6 +37,15 @@ func TestReferencesCommandGoldenJSON(t *testing.T) {
 			},
 		},
 		{
+			name:       "beta exact and incoming related references",
+			symbol:     traversaltest.BetaSymbol,
+			goldenFile: "references-beta.json",
+			wantSymbols: []string{
+				traversaltest.AlphaSymbol,
+				traversaltest.BetaSymbol,
+			},
+		},
+		{
 			name:        "absent exact symbol",
 			symbol:      "scip-go gomod example.com/fixture . missing/Absent#",
 			goldenFile:  "references-absent.json",

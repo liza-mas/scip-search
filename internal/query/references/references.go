@@ -57,6 +57,12 @@ func referenceCandidateSymbols(view traversal.View, symbol string) map[string]st
 		}
 		seen[relationship.TargetSymbol] = struct{}{}
 	}
+	for _, relationship := range view.RelationshipsTargeting(symbol) {
+		if !relationship.IsReference || relationship.SourceSymbol == "" {
+			continue
+		}
+		seen[relationship.SourceSymbol] = struct{}{}
+	}
 
 	return seen
 }
