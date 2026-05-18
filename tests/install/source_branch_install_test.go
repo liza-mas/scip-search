@@ -15,14 +15,17 @@ func TestBranchInstallBuildsRequestedBranchAndInstallsSourceExecutable(t *testin
 	harness := newBranchInstallHarness(t)
 	branch := "branch-install-test"
 	harness.createSourceRepo(t, branch)
+	sourceRevision := harness.commitBranchMarker(t, branch)
+	harness.addReleaseFallbackArtifact(t, "v9.9.9")
 
 	result := harness.run(t, map[string]string{
-		"BRANCH": branch,
+		"BRANCH":  branch,
+		"VERSION": "v9.9.9",
 	})
 
 	result.requireSuccess(t)
-	result.requireBranchSuccessOutput(t, harness.installedPath(), branch)
-	harness.requireInstalledSourceBuild(t, branch)
+	result.requireBranchSuccessOutput(t, harness.installedPath(), branch, sourceRevision)
+	harness.requireInstalledSourceBuild(t, branch, sourceRevision)
 	harness.requireSourceTmpClean(t)
 }
 
@@ -166,6 +169,27 @@ func (h *branchInstallHarness) createSourceRepo(t *testing.T, branch string) {
 	runCommand(t, h.gitPath, "-C", h.sourceRepo, "checkout", "--quiet", "-B", branch)
 }
 
+func (h *branchInstallHarness) commitBranchMarker(t *testing.T, branch string) string {
+	t.Helper()
+
+	runCommand(t, h.gitPath, "-C", h.sourceRepo, "checkout", "--quiet", branch)
+	markerPath := filepath.Join(h.sourceRepo, "branch-source-marker.txt")
+	if err := os.WriteFile(markerPath, []byte("controlled source branch: "+branch+"\n"), 0o644); err != nil {
+		t.Fatalf("write controlled branch marker: %v", err)
+	}
+	runCommand(t, h.gitPath, "-C", h.sourceRepo, "add", "branch-source-marker.txt")
+	runCommand(t, h.gitPath, "-C", h.sourceRepo, "-c", "user.name=Branch Test", "-c", "user.email=branch-test@example.invalid", "commit", "--quiet", "-m", "test: controlled branch source")
+
+	cmd := exec.Command(h.gitPath, "-C", h.sourceRepo, "rev-parse", "--short", "HEAD")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("read controlled branch revision: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
+	}
+	return strings.TrimSpace(stdout.String())
+}
+
 func (h *branchInstallHarness) replaceMakefile(t *testing.T, branch, content string) {
 	t.Helper()
 
@@ -240,7 +264,7 @@ func (h *branchInstallHarness) installedPath() string {
 	return filepath.Join(h.installDir, "scip-search")
 }
 
-func (h *branchInstallHarness) requireInstalledSourceBuild(t *testing.T, branch string) {
+func (h *branchInstallHarness) requireInstalledSourceBuild(t *testing.T, branch, sourceRevision string) {
 	t.Helper()
 
 	info, err := os.Stat(h.installedPath())
@@ -259,7 +283,7 @@ func (h *branchInstallHarness) requireInstalledSourceBuild(t *testing.T, branch 
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("%s --version failed outside source checkout: %v\nstdout:\n%s\nstderr:\n%s", h.installedPath(), err, stdout.String(), stderr.String())
 	}
-	for _, want := range []string{"scip-search", "source", "branch:" + branch} {
+	for _, want := range []string{"scip-search", "source", "branch:" + branch, sourceRevision} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("--version output = %q, want substring %q", stdout.String(), want)
 		}
@@ -298,7 +322,7 @@ func (h *branchInstallHarness) requireSourceTmpClean(t *testing.T) {
 	}
 }
 
-func (r commandResult) requireBranchSuccessOutput(t *testing.T, installedPath, branch string) {
+func (r commandResult) requireBranchSuccessOutput(t *testing.T, installedPath, branch, sourceRevision string) {
 	t.Helper()
 
 	if !strings.Contains(r.stdout, installedPath) {
@@ -306,6 +330,9 @@ func (r commandResult) requireBranchSuccessOutput(t *testing.T, installedPath, b
 	}
 	if !strings.Contains(r.stdout, "source") || !strings.Contains(r.stdout, branch) {
 		t.Fatalf("success output did not identify branch source provenance for %q:\nstdout:\n%s", branch, r.stdout)
+	}
+	if !strings.Contains(r.stdout, sourceRevision) {
+		t.Fatalf("success output did not identify controlled source revision %q:\nstdout:\n%s", sourceRevision, r.stdout)
 	}
 }
 
