@@ -1,0 +1,81 @@
+{
+  "packages": [
+    {
+      "scheme": "github.com/liza-mas/scip-search",
+      "packageManager": "gomod",
+      "packageName": "example.com/scheme-only",
+      "packageVersion": ".",
+      "packageKey": "github.com/liza-mas/scip-search gomod example.com/scheme-only ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "github.com/liza-mas/scip-search",
+      "packageName": "example.com/manager-only",
+      "packageVersion": ".",
+      "packageKey": "scip-go github.com/liza-mas/scip-search example.com/manager-only ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/dependency",
+      "packageVersion": "v1.2.3",
+      "packageKey": "scip-go gomod example.com/dependency v1.2.3"
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/descriptor-only",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod example.com/descriptor-only ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/fixture",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod example.com/fixture ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/path-only",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod example.com/path-only ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/symbol-name-only",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod example.com/symbol-name-only ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "example.com/version-only",
+      "packageVersion": "github.com/liza-mas/scip-search",
+      "packageKey": "scip-go gomod example.com/version-only github.com/liza-mas/scip-search"
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "github.com/liza-mas/liza",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod github.com/liza-mas/liza ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "github.com/liza-mas/scip-search",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod github.com/liza-mas/scip-search ."
+    },
+    {
+      "scheme": "scip-go",
+      "packageManager": "gomod",
+      "packageName": "github.com/sourcegraph/scip-bindings",
+      "packageVersion": ".",
+      "packageKey": "scip-go gomod github.com/sourcegraph/scip-bindings ."
+    }
+  ]
+}
