@@ -2,10 +2,12 @@ package install_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -36,6 +38,7 @@ func TestMakeInstallFailsWhenGoIsMissingWithoutSuccessClaim(t *testing.T) {
 	result.requireDiagnostic(t, "Go is required")
 	result.requireNoSuccessClaim(t)
 	harness.requireNotInstalled(t)
+	harness.requireForbiddenToolsUnused(t)
 }
 
 func TestMakeInstallFailsWhenMakeIsMissingWithoutSuccessClaim(t *testing.T) {
@@ -56,6 +59,7 @@ func TestMakeInstallFailsWhenMakeIsMissingWithoutSuccessClaim(t *testing.T) {
 	result.requireDiagnostic(t, "make")
 	result.requireNoSuccessClaim(t)
 	harness.requireNotInstalled(t)
+	harness.requireForbiddenToolsUnused(t)
 }
 
 func TestMakeInstallFailsWhenSourceBuildFailsWithoutSuccessClaim(t *testing.T) {
@@ -64,7 +68,7 @@ func TestMakeInstallFailsWhenSourceBuildFailsWithoutSuccessClaim(t *testing.T) {
 	harness := newMakeInstallHarness(t)
 	harness.linkHostTool(t, harness.toolDir, "make", harness.makePath)
 	fakeGo := harness.writeTool(t, "go", `#!/bin/sh
-printf '%s\n' "$*" >> "$SCIP_SEARCH_TEST_TOOL_LOG"
+printf '%s\n' "$*" >> "$SCIP_SEARCH_TEST_SOURCE_BUILD_LOG"
 exit 73
 `)
 
@@ -78,6 +82,7 @@ exit 73
 	harness.requireNotInstalled(t)
 	harness.requireToolLog(t, "build")
 	harness.requireToolLog(t, "./cmd/scip-search")
+	harness.requireForbiddenToolsUnused(t)
 }
 
 func TestMakeInstallFailsWhenInstallPathIsUnusableWithoutSuccessClaim(t *testing.T) {
@@ -95,18 +100,21 @@ func TestMakeInstallFailsWhenInstallPathIsUnusableWithoutSuccessClaim(t *testing
 	result.requireFailure(t)
 	result.requireDiagnostic(t, "INSTALL_DIR")
 	result.requireNoSuccessClaim(t)
+	harness.requireNotInstalled(t)
+	harness.requireForbiddenToolsUnused(t)
 }
 
 type makeInstallHarness struct {
-	sourceDir   string
-	shellPath   string
-	makePath    string
-	goPath      string
-	installDir  string
-	buildDir    string
-	cacheDir    string
-	toolDir     string
-	toolLogPath string
+	sourceDir    string
+	shellPath    string
+	makePath     string
+	goPath       string
+	installDir   string
+	buildDir     string
+	cacheDir     string
+	toolDir      string
+	toolLogPath  string
+	buildLogPath string
 }
 
 func newMakeInstallHarness(t *testing.T) *makeInstallHarness {
@@ -141,15 +149,16 @@ func newMakeInstallHarness(t *testing.T) *makeInstallHarness {
 	sourceDir := filepath.Join(root, "source")
 
 	harness := &makeInstallHarness{
-		sourceDir:   sourceDir,
-		shellPath:   shellPath,
-		makePath:    makePath,
-		goPath:      goPath,
-		installDir:  filepath.Join(root, "install"),
-		buildDir:    filepath.Join(root, "build"),
-		cacheDir:    filepath.Join(root, "go-cache"),
-		toolDir:     toolDir,
-		toolLogPath: filepath.Join(root, "tool.log"),
+		sourceDir:    sourceDir,
+		shellPath:    shellPath,
+		makePath:     makePath,
+		goPath:       goPath,
+		installDir:   filepath.Join(root, "install"),
+		buildDir:     filepath.Join(root, "build"),
+		cacheDir:     filepath.Join(root, "go-cache"),
+		toolDir:      toolDir,
+		toolLogPath:  filepath.Join(root, "tool.log"),
+		buildLogPath: filepath.Join(root, "source-build.log"),
 	}
 	runCommand(t, gitPath, "clone", "--quiet", repoRoot, sourceDir)
 
@@ -179,6 +188,7 @@ func (h *makeInstallHarness) run(t *testing.T, env map[string]string) makeInstal
 		"SCIP_SEARCH_TEST_INSTALL_DIR="+h.installDir,
 		"SCIP_SEARCH_TEST_BUILD_DIR="+h.buildDir,
 		"SCIP_SEARCH_TEST_TOOL_LOG="+h.toolLogPath,
+		"SCIP_SEARCH_TEST_SOURCE_BUILD_LOG="+h.buildLogPath,
 		"VERSION=v9.9.9",
 		"SCIP_SEARCH_RELEASES_FILE="+filepath.Join(t.TempDir(), "releases.tsv"),
 	)
@@ -259,7 +269,7 @@ func (h *makeInstallHarness) requireNotInstalled(t *testing.T) {
 
 	if _, err := os.Stat(h.installedPath()); err == nil {
 		t.Fatalf("expected no installed scip-search at %s", h.installedPath())
-	} else if !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
 		t.Fatalf("stat installed scip-search: %v", err)
 	}
 }
@@ -277,7 +287,7 @@ func (h *makeInstallHarness) requireForbiddenToolsUnused(t *testing.T) {
 func (h *makeInstallHarness) requireToolLog(t *testing.T, want string) {
 	t.Helper()
 
-	data, err := os.ReadFile(h.toolLogPath)
+	data, err := os.ReadFile(h.buildLogPath)
 	if err != nil {
 		t.Fatalf("read tool log: %v", err)
 	}
