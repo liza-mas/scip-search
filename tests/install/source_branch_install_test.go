@@ -117,6 +117,7 @@ type branchInstallHarness struct {
 	sourceRepo    string
 	installDir    string
 	sourceTmpRoot string
+	cacheDir      string
 	toolDir       string
 	gitPath       string
 }
@@ -152,6 +153,7 @@ func newBranchInstallHarness(t *testing.T) *branchInstallHarness {
 		sourceRepo:    filepath.Join(root, "source-repo"),
 		installDir:    filepath.Join(root, "install"),
 		sourceTmpRoot: filepath.Join(root, "source-tmp"),
+		cacheDir:      filepath.Join(root, "go-cache"),
 		toolDir:       toolDir,
 		gitPath:       gitPath,
 	}
@@ -206,6 +208,10 @@ func (h *branchInstallHarness) run(t *testing.T, env map[string]string) commandR
 	cmd.Dir = filepath.Join("..", "..", "tests", "install")
 	cmd.Env = append(cleanInstallerEnv(),
 		"HOME="+filepath.Join(t.TempDir(), "home"),
+		"GOPATH="+filepath.Join(h.cacheDir, "gopath"),
+		"GOMODCACHE="+filepath.Join(h.cacheDir, "gopath", "pkg", "mod"),
+		"GOCACHE="+filepath.Join(h.cacheDir, "build"),
+		"GOFLAGS=-modcacherw",
 		"INSTALL_DIR="+h.installDir,
 		"PATH="+h.toolDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"SCIP_SEARCH_INSTALL_OS=linux",
