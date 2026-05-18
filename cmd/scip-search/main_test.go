@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"scip-search/internal/cli"
 	runtimecontract "scip-search/internal/runtime"
+	"scip-search/internal/traversal/traversaltest"
 	"scip-search/internal/version"
 )
 
@@ -272,6 +274,138 @@ func TestRunValidGeneratedSCIPLoadsReachQueryBoundaryAcrossDocumentedCommands(t 
 	}
 }
 
+func TestRunProductionSymbolsCommandUsesDiscoveryImplementation(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Supervisor"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json")
+}
+
+func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"packages", "--index", fixture.IndexPath}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("packages status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
+}
+
+func TestRunProductionSymbolsMissingNameRemainsUsageFailure(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusUsage {
+		t.Fatalf("symbols missing --name status = %d, want %d", status, runtimecontract.StatusUsage)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "missing --name") {
+		t.Fatalf("stderr = %q, want missing --name diagnostic", stderr.String())
+	}
+}
+
+func TestRunProductionPackagesInvalidFlagsRemainUsageFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "unknown flag",
+			args: []string{"--name", "Supervisor"},
+			want: "packages only accepts --prefix",
+		},
+		{
+			name: "prefix missing value",
+			args: []string{"--prefix"},
+			want: "--prefix requires a value",
+		},
+		{
+			name: "duplicate prefix",
+			args: []string{"--prefix", "github.com/liza-mas/", "--prefix", "github.com/sourcegraph/"},
+			want: "--prefix can only be provided once",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := traversaltest.LoadSharedFixture(t)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			args := []string{"packages", "--index", fixture.IndexPath}
+			args = append(args, test.args...)
+
+			status := run(args, &stdout, &stderr)
+
+			if status != runtimecontract.StatusUsage {
+				t.Fatalf("packages invalid args status = %d, want %d", status, runtimecontract.StatusUsage)
+			}
+			if stdout.String() != "" {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), test.want) {
+				t.Fatalf("stderr = %q, want diagnostic containing %q", stderr.String(), test.want)
+			}
+		})
+	}
+}
+
+func TestRunProductionReferenceCommandsRemainUnimplemented(t *testing.T) {
+	t.Parallel()
+
+	for _, command := range []string{"references", "implementations"} {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := traversaltest.LoadSharedFixture(t)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := run(documentedCommandArgs(command, fixture.IndexPath), &stdout, &stderr)
+
+			if status != runtimecontract.StatusUsage {
+				t.Fatalf("%s status = %d, want %d", command, status, runtimecontract.StatusUsage)
+			}
+			if stdout.String() != "" {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), "query execution is not implemented") {
+				t.Fatalf("stderr = %q, want unimplemented diagnostic", stderr.String())
+			}
+		})
+	}
+}
+
 type openFailureLoader struct {
 	paths []string
 }
@@ -417,6 +551,43 @@ func assertSingleJSONCommand(t *testing.T, output []byte, command string) {
 	if err := decoder.Decode(&extra); err != io.EOF {
 		t.Fatalf("stdout contains extra JSON or non-JSON content after first value: %v", err)
 	}
+}
+
+func assertProductionJSONMatchesGolden(t *testing.T, output []byte, goldenFile string) {
+	t.Helper()
+
+	got := decodeJSONValue(t, output)
+	want := readDiscoveryGoldenJSONValue(t, goldenFile)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("production JSON value = %#v, want golden %#v", got, want)
+	}
+}
+
+func readDiscoveryGoldenJSONValue(t *testing.T, goldenFile string) any {
+	t.Helper()
+
+	payload, err := os.ReadFile(filepath.Join("..", "..", "internal", "query", "discovery", "testdata", "golden", goldenFile))
+	if err != nil {
+		t.Fatalf("read discovery golden file %q: %v", goldenFile, err)
+	}
+
+	return decodeJSONValue(t, payload)
+}
+
+func decodeJSONValue(t *testing.T, payload []byte) any {
+	t.Helper()
+
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("decode JSON payload %q: %v", payload, err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		t.Fatalf("JSON payload %q contains extra content: %v", payload, err)
+	}
+
+	return decoded
 }
 
 func writeSelectedIndexBytes(t *testing.T, contents []byte) string {
