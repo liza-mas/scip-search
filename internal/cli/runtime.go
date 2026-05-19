@@ -17,7 +17,10 @@ var documentedCommands = []string{
 	"packages",
 }
 
-const helpText = `Usage:
+const helpText = `Description:
+  Search a pre-built SCIP index for symbols, references, implementations, and packages.
+
+Usage:
   scip-search --help
   scip-search --version
   scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
@@ -30,6 +33,31 @@ Commands:
   references       Find references to exact SCIP symbols or symbols found by name.
   implementations  Find implementations of exact SCIP symbols or symbols found by name.
   packages         List package identities in an index.
+
+Output:
+  --one-line     Grep-style text output; default for all query commands.
+  --json         Structured JSON output.
+  --nested-json  Compact package-grouped JSON output for symbols only.
+
+One-line formats:
+  symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>
+  references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>
+  implementations  <path>:<line>:<column>:<implementation-symbol>
+  packages         <packageKey>
+
+Notes:
+  references and implementations require --symbol, --name, or both.
+  Reads an existing SCIP index; does not generate, update, or discover indexes.
+
+Exit codes:
+  0  success
+  1  unexpected runtime error
+  2  usage error
+  3  index loading error
+
+Examples:
+  scip-search symbols --index go.scip --name Handler
+  scip-search references --index go.scip --name Handler --one-line
 `
 
 // Loader is the boundary that later runtime stages use after command selection.

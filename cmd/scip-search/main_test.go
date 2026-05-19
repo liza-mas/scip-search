@@ -91,11 +91,25 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	for _, want := range []string{
+		"Description:",
+		"Search a pre-built SCIP index for symbols, references, implementations, and packages.",
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
 		"scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
 		"scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
+		"Output:",
+		"--one-line     Grep-style text output; default for all query commands.",
+		"--nested-json  Compact package-grouped JSON output for symbols only.",
+		"One-line formats:",
+		"symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>",
+		"references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>",
+		"implementations  <path>:<line>:<column>:<implementation-symbol>",
+		"references and implementations require --symbol, --name, or both.",
+		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
+		"Exit codes:",
+		"2  usage error",
+		"Examples:",
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
