@@ -21,14 +21,14 @@ const helpText = `Usage:
   scip-search --help
   scip-search --version
   scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
-  scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]
-  scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]
+  scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
+  scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
   scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 
 Commands:
   symbols          Find symbols by literal partial name.
-  references       Find references to an exact SCIP symbol.
-  implementations  Find implementations of an exact SCIP symbol.
+  references       Find references to exact SCIP symbols or symbols found by name.
+  implementations  Find implementations of exact SCIP symbols or symbols found by name.
   packages         List package identities in an index.
 `
 

@@ -2,13 +2,16 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
 	"scip-search/internal/query/implementations"
+	"scip-search/internal/query/oneline"
 	"scip-search/internal/query/references"
 	runtimecontract "scip-search/internal/runtime"
 	"scip-search/internal/traversal"
@@ -172,12 +175,24 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 	if !ok {
 		return nil, errors.New("implementations handler received non-SCIP loaded index")
 	}
-	symbol, outputMode, err := parseExactSymbolArgs(args, "implementations")
+	symbols, usesName, outputMode, err := parseAndResolveSymbolSet(traversal.NewView(loaded), args, "implementations")
 	if err != nil {
 		return nil, err
 	}
 
-	payload, err := implementations.Implementations(traversal.NewView(loaded), symbol)
+	if !usesName {
+		payload, err := implementations.Implementations(traversal.NewView(loaded), symbols[0])
+		if err != nil {
+			return nil, err
+		}
+		if outputMode == outputJSON {
+			return payload, nil
+		}
+
+		return runtimecontract.RawOutput{Text: implementations.OneLine(payload)}, nil
+	}
+
+	payload, err := implementationQueries(traversal.NewView(loaded), symbols)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +200,7 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 		return payload, nil
 	}
 
-	return runtimecontract.RawOutput{Text: implementations.OneLine(payload)}, nil
+	return runtimecontract.RawOutput{Text: oneLineImplementationQueries(payload)}, nil
 }
 
 type referencesHandler struct{}
@@ -195,17 +210,26 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !ok {
 		return nil, errors.New("references handler received non-SCIP loaded index")
 	}
-	symbol, outputMode, err := parseExactSymbolArgs(args, "references")
+	symbols, usesName, outputMode, err := parseAndResolveSymbolSet(traversal.NewView(loaded), args, "references")
 	if err != nil {
 		return nil, err
 	}
 
-	payload := references.Query(traversal.NewView(loaded), symbol)
+	if !usesName {
+		payload := references.Query(traversal.NewView(loaded), symbols[0])
+		if outputMode == outputJSON {
+			return payload, nil
+		}
+
+		return runtimecontract.RawOutput{Text: references.OneLine(payload)}, nil
+	}
+
+	payload := referenceQueries(traversal.NewView(loaded), symbols)
 	if outputMode == outputJSON {
 		return payload, nil
 	}
 
-	return runtimecontract.RawOutput{Text: references.OneLine(payload)}, nil
+	return runtimecontract.RawOutput{Text: oneLineReferenceQueries(payload)}, nil
 }
 
 func parsePackagePrefixArgs(args []string) (string, oneLineJSONOutputMode, error) {
@@ -251,60 +275,204 @@ func parsePackagePrefixArgs(args []string) (string, oneLineJSONOutputMode, error
 	return prefix, outputMode, nil
 }
 
-func parseExactSymbolArgs(args []string, command string) (string, oneLineJSONOutputMode, error) {
-	return parseRequiredQueryValueWithOutput(args, "--symbol", command)
+type symbolSetArgs struct {
+	symbol    string
+	hasSymbol bool
+	name      string
+	hasName   bool
 }
 
-func parseRequiredQueryValueWithOutput(args []string, flag string, command string) (string, oneLineJSONOutputMode, error) {
-	if len(args) == 0 {
-		return "", outputOneLine, errors.New("missing " + flag)
-	}
-	if duplicateFlag(args, flag) {
-		return "", outputOneLine, errors.New(flag + " can only be provided once")
-	}
-	if duplicateFlag(args, "--one-line") {
-		return "", outputOneLine, errors.New("--one-line can only be provided once")
-	}
-	if duplicateFlag(args, "--json") {
-		return "", outputOneLine, errors.New("--json can only be provided once")
+type referenceQueriesPayload struct {
+	Symbols []string             `json:"symbols"`
+	Queries []references.Payload `json:"queries"`
+}
+
+type implementationQueriesPayload struct {
+	Symbols []string                  `json:"symbols"`
+	Queries []implementations.Payload `json:"queries"`
+}
+
+type referenceOutputKey struct {
+	symbol       string
+	documentPath string
+	roles        int32
+	rangeLength  int
+	scipRange    [4]int32
+}
+
+func parseAndResolveSymbolSet(
+	view traversal.View,
+	args []string,
+	command string,
+) ([]string, bool, oneLineJSONOutputMode, error) {
+	queryArgs, outputMode, err := parseSymbolSetArgs(args, command)
+	if err != nil {
+		return nil, false, outputOneLine, err
 	}
 
-	var value string
-	hasValue := false
+	symbols, err := resolveSymbolSet(view, queryArgs)
+	if err != nil {
+		return nil, false, outputOneLine, err
+	}
+
+	return symbols, queryArgs.hasName, outputMode, nil
+}
+
+func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJSONOutputMode, error) {
+	if duplicateFlag(args, "--symbol") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--symbol can only be provided once")
+	}
+	if duplicateFlag(args, "--name") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--name can only be provided once")
+	}
+	if duplicateFlag(args, "--one-line") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--one-line can only be provided once")
+	}
+	if duplicateFlag(args, "--json") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--json can only be provided once")
+	}
+
+	var queryArgs symbolSetArgs
 	outputMode := outputOneLine
 	hasOutputMode := false
 	for position := 0; position < len(args); position++ {
 		arg := args[position]
 		switch arg {
-		case flag:
+		case "--symbol":
 			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
-				return "", outputOneLine, errors.New(flag + " requires a value")
+				return symbolSetArgs{}, outputOneLine, errors.New("--symbol requires a value")
 			}
-			value = args[position+1]
-			hasValue = true
+			queryArgs.symbol = args[position+1]
+			queryArgs.hasSymbol = true
+			position++
+		case "--name":
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return symbolSetArgs{}, outputOneLine, errors.New("--name requires a value")
+			}
+			queryArgs.name = args[position+1]
+			queryArgs.hasName = true
 			position++
 		case "--one-line":
 			if hasOutputMode {
-				return "", outputOneLine, errors.New(command + " output flags are mutually exclusive")
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
 			}
 			outputMode = outputOneLine
 			hasOutputMode = true
 		case "--json":
 			if hasOutputMode {
-				return "", outputOneLine, errors.New(command + " output flags are mutually exclusive")
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
 			}
 			outputMode = outputJSON
 			hasOutputMode = true
 		default:
-			return "", outputOneLine, errors.New(command + " only accepts " + flag + ", --one-line, and --json")
+			return symbolSetArgs{}, outputOneLine, errors.New(command + " only accepts --symbol, --name, --one-line, and --json")
 		}
 	}
 
-	if !hasValue {
-		return "", outputOneLine, errors.New("missing " + flag)
+	if !queryArgs.hasSymbol && !queryArgs.hasName {
+		return symbolSetArgs{}, outputOneLine, errors.New("missing --symbol or --name")
 	}
 
-	return value, outputMode, nil
+	return queryArgs, outputMode, nil
+}
+
+func resolveSymbolSet(view traversal.View, queryArgs symbolSetArgs) ([]string, error) {
+	symbols := make([]string, 0, 1)
+	if queryArgs.hasSymbol {
+		symbols = append(symbols, queryArgs.symbol)
+	}
+	if queryArgs.hasName {
+		discovered, err := discovery.FlatSymbolsByName(view, queryArgs.name)
+		if err != nil {
+			return nil, err
+		}
+		for _, symbol := range discovered.Symbols {
+			symbols = append(symbols, symbol.Symbol)
+		}
+	}
+
+	return uniqueSortedStrings(symbols), nil
+}
+
+func uniqueSortedStrings(values []string) []string {
+	slices.Sort(values)
+	return slices.Compact(values)
+}
+
+func referenceQueries(view traversal.View, symbols []string) referenceQueriesPayload {
+	queries := make([]references.Payload, 0, len(symbols))
+	for _, symbol := range symbols {
+		queries = append(queries, references.Query(view, symbol))
+	}
+	return referenceQueriesPayload{
+		Symbols: symbols,
+		Queries: queries,
+	}
+}
+
+func implementationQueries(view traversal.View, symbols []string) (implementationQueriesPayload, error) {
+	queries := make([]implementations.Payload, 0, len(symbols))
+	for _, symbol := range symbols {
+		payload, err := implementations.Implementations(view, symbol)
+		if err != nil {
+			return implementationQueriesPayload{}, err
+		}
+		queries = append(queries, payload)
+	}
+	return implementationQueriesPayload{
+		Symbols: symbols,
+		Queries: queries,
+	}, nil
+}
+
+func oneLineReferenceQueries(payload referenceQueriesPayload) string {
+	var builder strings.Builder
+	seen := map[referenceOutputKey]struct{}{}
+	for _, query := range payload.Queries {
+		for _, reference := range query.References {
+			key := keyReferenceOutput(reference)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			path, line, column := oneline.Location(reference.DocumentPath, reference.Range)
+			fmt.Fprintf(
+				&builder,
+				"%s:%d:%d:%s roles=%d\n",
+				path,
+				line,
+				column,
+				reference.Symbol,
+				reference.Roles,
+			)
+		}
+	}
+	return builder.String()
+}
+
+func keyReferenceOutput(reference references.Reference) referenceOutputKey {
+	key := referenceOutputKey{
+		symbol:       reference.Symbol,
+		documentPath: reference.DocumentPath,
+		roles:        reference.Roles,
+		rangeLength:  len(reference.Range),
+	}
+	for index, value := range reference.Range {
+		if index >= len(key.scipRange) {
+			break
+		}
+		key.scipRange[index] = value
+	}
+	return key
+}
+
+func oneLineImplementationQueries(payload implementationQueriesPayload) string {
+	var builder strings.Builder
+	for _, query := range payload.Queries {
+		builder.WriteString(implementations.OneLine(query))
+	}
+	return builder.String()
 }
 
 func duplicateFlag(args []string, flag string) bool {

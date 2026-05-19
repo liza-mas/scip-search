@@ -68,8 +68,8 @@ Cold start is milliseconds — loads a pre-built binary index, performs no compi
 scip-search --help
 scip-search --version
 scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
-scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]
-scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]
+scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
+scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
 scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 ```
 
@@ -79,14 +79,18 @@ scip-search symbols --index /path/to/go.scip --name SymbolSource
 scip-search symbols --index /path/to/go.scip --name SymbolSource --nested-json
 scip-search symbols --index /path/to/go.scip --name SymbolSource --json
 scip-search references --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSource#'
+scip-search references --index /path/to/go.scip --name SymbolSource
 scip-search references --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSource#' --json
 scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#'
+scip-search implementations --index /path/to/go.scip --name Handler
 scip-search packages --index /path/to/go.scip
 ```
 
 ### Runtime Contract
 
 All query commands require `--index <index-path>`.
+
+`references` and `implementations` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both.
 
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
@@ -105,7 +109,7 @@ Default reference and implementation output also use one source-location-prefixe
 <path>:<line>:<column>:<implementation-symbol>
 ```
 
-`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload.
+`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload. `references` and `implementations` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value.
 
 In one-line output, `line` and `column` are the SCIP range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols or implementations without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata after the third colon is grep-style human-readable text. `symbols` match text escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line. `packages` one-line output writes one package key per line.
 

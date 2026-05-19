@@ -93,8 +93,8 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 	for _, want := range []string{
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
-		"scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
-		"scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
+		"scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
+		"scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 	} {
 		if !strings.Contains(stdout.String(), want) {
@@ -511,6 +511,64 @@ func TestRunProductionImplementationsCommandAcceptsJSONOutput(t *testing.T) {
 	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json")
 }
 
+func TestRunProductionImplementationsCommandAcceptsNameResolution(t *testing.T) {
+	t.Parallel()
+
+	indexPath := writeImplementationNameFixtureIndex(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"implementations", "--index", indexPath, "--name", "Runnable"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations --name status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	want := "impl/concrete.go:4:3:scip-go gomod example.com/name . impl/ConcreteDoer#\n"
+	if stdout.String() != want {
+		t.Fatalf("implementations --name stdout = %q, want one-line output %q", stdout.String(), want)
+	}
+}
+
+func TestRunProductionImplementationsCommandCombinesSymbolAndNameInJSON(t *testing.T) {
+	t.Parallel()
+
+	indexPath := writeImplementationNameFixtureIndex(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"implementations",
+		"--index",
+		indexPath,
+		"--symbol",
+		"scip-go gomod example.com/name . api/Absent#",
+		"--name",
+		"Runnable",
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations --symbol --name --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertStringArrayField(t, payload, "symbols", []string{
+		"scip-go gomod example.com/name . api/Absent#",
+		"scip-go gomod example.com/name . api/Runnable#",
+	})
+	queries := payload["queries"].([]any)
+	if len(queries) != 2 {
+		t.Fatalf("queries = %#v, want two per-symbol implementation queries", queries)
+	}
+	assertQuerySymbol(t, queries[0], "scip-go gomod example.com/name . api/Absent#")
+	assertQuerySymbol(t, queries[1], "scip-go gomod example.com/name . api/Runnable#")
+}
+
 func TestRunProductionReferencesCommandDefaultsToOneLineOutput(t *testing.T) {
 	t.Parallel()
 
@@ -552,6 +610,90 @@ func TestRunProductionReferencesCommandAcceptsJSONOutput(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-beta.json")
+}
+
+func TestRunProductionReferencesCommandAcceptsNameResolution(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"references", "--index", fixture.IndexPath, "--name", "Alpha"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references --name status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	want := strings.Join([]string{
+		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
+		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("references --name stdout = %q, want one-line output %q", stdout.String(), want)
+	}
+}
+
+func TestRunProductionReferencesCommandNameResolutionDeduplicatesRelatedSymbols(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"references", "--index", fixture.IndexPath, "--name", "a"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references --name status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	want := strings.Join([]string{
+		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
+		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("references --name overlapping symbols stdout = %q, want deduplicated output %q", stdout.String(), want)
+	}
+}
+
+func TestRunProductionReferencesCommandCombinesSymbolAndNameInJSON(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"references",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.BetaSymbol,
+		"--name",
+		"Alpha",
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references --symbol --name --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertStringArrayField(t, payload, "symbols", []string{traversaltest.AlphaSymbol, traversaltest.BetaSymbol})
+	queries := payload["queries"].([]any)
+	if len(queries) != 2 {
+		t.Fatalf("queries = %#v, want two per-symbol reference queries", queries)
+	}
+	assertQuerySymbol(t, queries[0], traversaltest.AlphaSymbol)
+	assertQuerySymbol(t, queries[1], traversaltest.BetaSymbol)
 }
 
 func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
@@ -708,7 +850,7 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 		{
 			name:    "references wrong query flag",
 			command: "references",
-			args:    []string{"--name", "Supervisor"},
+			args:    []string{"--prefix", "github.com/liza-mas/"},
 		},
 		{
 			name:    "implementations missing symbol",
@@ -753,7 +895,7 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 		{
 			name:    "implementations wrong query flag",
 			command: "implementations",
-			args:    []string{"--name", "Supervisor"},
+			args:    []string{"--prefix", "github.com/liza-mas/"},
 		},
 		{
 			name:    "packages stray positional",
@@ -858,7 +1000,7 @@ func TestRunProductionReferencesSymbolUsageFailures(t *testing.T) {
 		{
 			name: "missing symbol",
 			args: nil,
-			want: "missing --symbol",
+			want: "missing --symbol or --name",
 		},
 		{
 			name: "empty symbol",
@@ -953,7 +1095,7 @@ func TestRunProductionImplementationsMissingSymbolRemainsUsageFailure(t *testing
 		{
 			name: "missing symbol",
 			args: nil,
-			want: "missing --symbol",
+			want: "missing --symbol or --name",
 		},
 		{
 			name: "empty symbol",
@@ -1211,6 +1353,89 @@ func decodeJSONValue(t *testing.T, payload []byte) any {
 	}
 
 	return decoded
+}
+
+func assertStringArrayField(t *testing.T, payload map[string]any, field string, want []string) {
+	t.Helper()
+
+	values, ok := payload[field].([]any)
+	if !ok {
+		t.Fatalf("%s = %T, want array", field, payload[field])
+	}
+
+	got := make([]string, 0, len(values))
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("%s entry = %T, want string", field, value)
+		}
+		got = append(got, text)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%s = %v, want %v", field, got, want)
+	}
+}
+
+func assertQuerySymbol(t *testing.T, query any, want string) {
+	t.Helper()
+
+	object, ok := query.(map[string]any)
+	if !ok {
+		t.Fatalf("query = %T, want object", query)
+	}
+	if got, ok := object["symbol"].(string); !ok || got != want {
+		t.Fatalf("query = %#v, want symbol %q", query, want)
+	}
+}
+
+func writeImplementationNameFixtureIndex(t *testing.T) string {
+	t.Helper()
+
+	const (
+		targetSymbol         = "scip-go gomod example.com/name . api/Runnable#"
+		implementationSymbol = "scip-go gomod example.com/name . impl/ConcreteDoer#"
+	)
+
+	payload, err := proto.Marshal(&scip.Index{
+		Metadata: &scip.Metadata{
+			ToolInfo: &scip.ToolInfo{Name: "implementation-name-fixture"},
+		},
+		Documents: []*scip.Document{
+			{
+				RelativePath: "api/doer.go",
+				Symbols: []*scip.SymbolInformation{
+					{
+						Symbol:      targetSymbol,
+						DisplayName: "Runnable",
+					},
+				},
+			},
+			{
+				RelativePath: "impl/concrete.go",
+				Symbols: []*scip.SymbolInformation{
+					{
+						Symbol:      implementationSymbol,
+						DisplayName: "ConcreteDoer",
+						Relationships: []*scip.Relationship{
+							{Symbol: targetSymbol, IsImplementation: true},
+						},
+					},
+				},
+				Occurrences: []*scip.Occurrence{
+					{
+						Symbol:      implementationSymbol,
+						Range:       []int32{3, 2, 12},
+						SymbolRoles: int32(scip.SymbolRole_Definition),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("proto.Marshal(implementation name fixture) error = %v", err)
+	}
+
+	return writeSelectedIndexBytes(t, payload)
 }
 
 func writeSelectedIndexBytes(t *testing.T, contents []byte) string {

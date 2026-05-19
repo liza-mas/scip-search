@@ -122,8 +122,8 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 	for _, want := range []string{
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
-		"scip-search references --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
-		"scip-search implementations --index <index-path> --symbol <scip-symbol> [--one-line|--json]",
+		"scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
+		"scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 	} {
 		if !strings.Contains(stdout.String(), want) {
