@@ -23,9 +23,9 @@ const helpText = `Description:
 Usage:
   scip-search --help
   scip-search --version
-  scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
-  scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
-  scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
+  scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]
+  scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
+  scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
   scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 
 Commands:
@@ -46,6 +46,8 @@ One-line formats:
   packages         <packageKey>
 
 Notes:
+  symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.
+  Repeated results are de-duplicated.
   references and implementations require --symbol, --name, or both.
   Reads an existing SCIP index; does not generate, update, or discover indexes.
 

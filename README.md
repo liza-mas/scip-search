@@ -81,7 +81,7 @@ resolution is sufficient.
 **`scip-search`** is a thin Go binary that:
 
 1. Loads a SCIP index file at the path provided with `--index`
-2. Answers a query using the SCIP Go bindings
+2. Answers a query using the official SCIP bindings for Go
 3. Prints the selected successful output format to stdout
 4. Exits
 
@@ -90,9 +90,9 @@ Cold start is milliseconds — loads a pre-built binary index, performs no compi
 ```bash
 scip-search --help
 scip-search --version
-scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]
-scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
-scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]
+scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]
+scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
+scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
 scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 ```
 
@@ -113,7 +113,7 @@ scip-search packages --index /path/to/go.scip
 
 All query commands require `--index <index-path>`.
 
-`references` and `implementations` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both.
+`symbols` accepts one or more `--name <name>` values. `references` and `implementations` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both. `--name` and `--symbol` can be repeated; repeated resolved symbols are de-duplicated. When multiple `symbols --name` values match the same symbol, the result appears once and its `matchText` / `matchSource` come from the first matching `--name` value in CLI order.
 
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
@@ -142,11 +142,11 @@ After the shared runtime accepts an index path, every documented query command r
 
 Index-loading failures happen before the selected query handler runs. A nonexistent path, unreadable file, directory path, or readable file that is not valid SCIP input leaves stdout empty, writes a human-readable diagnostic to stderr, and exits with status `3`.
 
-Valid SCIP input is loaded through the official SCIP Go bindings before the selected query handler runs. This loading boundary does not define query result fields or traversal behavior.
+Valid SCIP input from any supported SCIP-producing language is loaded through the official SCIP bindings for Go before the selected query handler runs. This loading boundary does not define query result fields or traversal behavior.
 
 ### Language Support
 
-Uses the official SCIP bindings (e.g. `github.com/scip-code/scip/bindings/go/scip`) for parsing and traversal.
+Uses the official SCIP bindings for Go (e.g. `github.com/scip-code/scip/bindings/go/scip`) to parse language-agnostic SCIP indexes.
 
 `scip-search` reads the SCIP output directly.
 

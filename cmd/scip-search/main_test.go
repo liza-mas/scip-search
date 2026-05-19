@@ -94,9 +94,9 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"Description:",
 		"Search a pre-built SCIP index for symbols, references, implementations, and packages.",
 		"Usage:",
-		"scip-search symbols --index <index-path> --name <name> [--one-line|--nested-json|--json]",
-		"scip-search references --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
-		"scip-search implementations --index <index-path> [--symbol <scip-symbol>] [--name <name>] [--one-line|--json]",
+		"scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]",
+		"scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]",
+		"scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
@@ -105,6 +105,8 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>",
 		"references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>",
 		"implementations  <path>:<line>:<column>:<implementation-symbol>",
+		"symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.",
+		"Repeated results are de-duplicated.",
 		"references and implementations require --symbol, --name, or both.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
@@ -409,6 +411,72 @@ func TestRunProductionSymbolsCommandAcceptsJSONOutput(t *testing.T) {
 	}
 }
 
+func TestRunProductionSymbolsCommandAcceptsRepeatedNamesInAllOutputModes(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	tests := []struct {
+		name      string
+		extraArgs []string
+	}{
+		{name: "one-line"},
+		{name: "nested json", extraArgs: []string{"--nested-json"}},
+		{name: "json", extraArgs: []string{"--json"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			args := []string{
+				"symbols",
+				"--index",
+				fixture.IndexPath,
+				"--name",
+				"Beta",
+				"--name",
+				"Alpha",
+				"--name",
+				"Alpha",
+			}
+			args = append(args, test.extraArgs...)
+
+			status := run(args, &stdout, &stderr)
+
+			if status != runtimecontract.StatusOK {
+				t.Fatalf("symbols repeated --name status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+			}
+			if stderr.String() != "" {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+			if test.name == "json" {
+				payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+				assertSymbolResultArrayField(t, payload, "symbols", []string{
+					traversaltest.AlphaSymbol,
+					traversaltest.BetaSymbol,
+				})
+				return
+			}
+			if test.name == "nested json" {
+				output := stdout.String()
+				for _, want := range []string{"cmd/Alpha().", "pkg/Beta#"} {
+					if !strings.Contains(output, want) {
+						t.Fatalf("symbols repeated --name nested JSON output = %q, want descriptor %q", output, want)
+					}
+				}
+				return
+			}
+			for _, want := range []string{traversaltest.AlphaSymbol, traversaltest.BetaSymbol} {
+				if got := strings.Count(stdout.String(), want); got != 1 {
+					t.Fatalf("symbols repeated --name one-line count for %q = %d, want 1; output = %q", want, got, stdout.String())
+				}
+			}
+		})
+	}
+}
+
 func TestRunProductionPackagesCommandUsesDiscoveryImplementation(t *testing.T) {
 	t.Parallel()
 
@@ -550,6 +618,10 @@ func TestRunProductionImplementationsCommandCombinesSymbolAndNameInJSON(t *testi
 	t.Parallel()
 
 	indexPath := writeImplementationNameFixtureIndex(t)
+	const (
+		absentSymbol = "scip-go gomod example.com/name . api/Absent#"
+		targetSymbol = "scip-go gomod example.com/name . api/Runnable#"
+	)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -558,7 +630,11 @@ func TestRunProductionImplementationsCommandCombinesSymbolAndNameInJSON(t *testi
 		"--index",
 		indexPath,
 		"--symbol",
-		"scip-go gomod example.com/name . api/Absent#",
+		targetSymbol,
+		"--symbol",
+		absentSymbol,
+		"--name",
+		"Runnable",
 		"--name",
 		"Runnable",
 		"--json",
@@ -572,15 +648,80 @@ func TestRunProductionImplementationsCommandCombinesSymbolAndNameInJSON(t *testi
 	}
 	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
 	assertStringArrayField(t, payload, "symbols", []string{
-		"scip-go gomod example.com/name . api/Absent#",
-		"scip-go gomod example.com/name . api/Runnable#",
+		absentSymbol,
+		targetSymbol,
 	})
 	queries := payload["queries"].([]any)
 	if len(queries) != 2 {
 		t.Fatalf("queries = %#v, want two per-symbol implementation queries", queries)
 	}
-	assertQuerySymbol(t, queries[0], "scip-go gomod example.com/name . api/Absent#")
-	assertQuerySymbol(t, queries[1], "scip-go gomod example.com/name . api/Runnable#")
+	assertQuerySymbol(t, queries[0], absentSymbol)
+	assertQuerySymbol(t, queries[1], targetSymbol)
+}
+
+func TestRunProductionImplementationsCommandDeduplicatesRepeatedExactSymbols(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"implementations",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.ImplSymbol,
+		"--symbol",
+		traversaltest.ImplSymbol,
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations duplicate --symbol --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertQuerySymbol(t, payload, traversaltest.ImplSymbol)
+	if _, ok := payload["queries"]; ok {
+		t.Fatalf("payload = %#v, want legacy single-symbol payload after duplicate exact symbol de-dupe", payload)
+	}
+}
+
+func TestRunProductionImplementationsCommandAcceptsMultipleExactSymbolsInJSON(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"implementations",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.ImplSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations repeated --symbol --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertStringArrayField(t, payload, "symbols", []string{traversaltest.AlphaSymbol, traversaltest.ImplSymbol})
+	queries := payload["queries"].([]any)
+	if len(queries) != 2 {
+		t.Fatalf("queries = %#v, want two per-symbol implementation queries", queries)
+	}
+	assertQuerySymbol(t, queries[0], traversaltest.AlphaSymbol)
+	assertQuerySymbol(t, queries[1], traversaltest.ImplSymbol)
 }
 
 func TestRunProductionReferencesCommandDefaultsToOneLineOutput(t *testing.T) {
@@ -689,6 +830,10 @@ func TestRunProductionReferencesCommandCombinesSymbolAndNameInJSON(t *testing.T)
 		fixture.IndexPath,
 		"--symbol",
 		traversaltest.BetaSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--name",
+		"Alpha",
 		"--name",
 		"Alpha",
 		"--json",
@@ -696,6 +841,71 @@ func TestRunProductionReferencesCommandCombinesSymbolAndNameInJSON(t *testing.T)
 
 	if status != runtimecontract.StatusOK {
 		t.Fatalf("references --symbol --name --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertStringArrayField(t, payload, "symbols", []string{traversaltest.AlphaSymbol, traversaltest.BetaSymbol})
+	queries := payload["queries"].([]any)
+	if len(queries) != 2 {
+		t.Fatalf("queries = %#v, want two per-symbol reference queries", queries)
+	}
+	assertQuerySymbol(t, queries[0], traversaltest.AlphaSymbol)
+	assertQuerySymbol(t, queries[1], traversaltest.BetaSymbol)
+}
+
+func TestRunProductionReferencesCommandDeduplicatesRepeatedExactSymbols(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"references",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references duplicate --symbol --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertQuerySymbol(t, payload, traversaltest.AlphaSymbol)
+	if _, ok := payload["queries"]; ok {
+		t.Fatalf("payload = %#v, want legacy single-symbol payload after duplicate exact symbol de-dupe", payload)
+	}
+}
+
+func TestRunProductionReferencesCommandAcceptsMultipleExactSymbolsInJSON(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"references",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.BetaSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--json",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references repeated --symbol --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -782,11 +992,6 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			args:    []string{"--name", "--unknown"},
 		},
 		{
-			name:    "symbols duplicate name",
-			command: "symbols",
-			args:    []string{"--name", "Supervisor", "--name", "Run"},
-		},
-		{
 			name:    "symbols duplicate one-line",
 			command: "symbols",
 			args:    []string{"--name", "Supervisor", "--one-line", "--one-line"},
@@ -842,11 +1047,6 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			args:    []string{"--symbol", "--unknown"},
 		},
 		{
-			name:    "references duplicate symbol",
-			command: "references",
-			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--symbol", traversaltest.BetaSymbol},
-		},
-		{
 			name:    "references unknown trailing flag",
 			command: "references",
 			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--unknown"},
@@ -885,11 +1085,6 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			name:    "implementations flag-shaped symbol",
 			command: "implementations",
 			args:    []string{"--symbol", "--unknown"},
-		},
-		{
-			name:    "implementations duplicate symbol",
-			command: "implementations",
-			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--symbol", traversaltest.ImplSymbol},
 		},
 		{
 			name:    "implementations unknown trailing flag",
@@ -1387,6 +1582,31 @@ func assertStringArrayField(t *testing.T, payload map[string]any, field string, 
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("%s = %v, want %v", field, got, want)
+	}
+}
+
+func assertSymbolResultArrayField(t *testing.T, payload map[string]any, field string, want []string) {
+	t.Helper()
+
+	values, ok := payload[field].([]any)
+	if !ok {
+		t.Fatalf("%s = %T, want array", field, payload[field])
+	}
+
+	got := make([]string, 0, len(values))
+	for _, value := range values {
+		object, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("%s entry = %T, want object", field, value)
+		}
+		symbol, ok := object["symbol"].(string)
+		if !ok {
+			t.Fatalf("%s entry symbol = %T, want string", field, object["symbol"])
+		}
+		got = append(got, symbol)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%s symbols = %v, want %v", field, got, want)
 	}
 }
 

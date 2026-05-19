@@ -49,22 +49,22 @@ func (symbolsHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !ok {
 		return nil, errors.New("symbols handler received non-SCIP loaded index")
 	}
-	name, outputMode, err := parseSymbolArgs(args)
+	names, outputMode, err := parseSymbolArgs(args)
 	if err != nil {
 		return nil, err
 	}
 	view := traversal.NewView(loaded)
 	switch outputMode {
 	case symbolsOutputOneLine:
-		text, err := discovery.OneLineSymbolsByName(view, name)
+		text, err := discovery.OneLineSymbolsByNames(view, names)
 		if err != nil {
 			return nil, err
 		}
 		return runtimecontract.RawOutput{Text: text}, nil
 	case symbolsOutputJSON:
-		return discovery.FlatSymbolsByName(view, name)
+		return discovery.FlatSymbolsByNames(view, names)
 	case symbolsOutputNestedJSON:
-		return discovery.SymbolsByName(view, name)
+		return discovery.SymbolsByNames(view, names)
 	default:
 		return nil, errors.New("unknown symbols output mode")
 	}
@@ -78,22 +78,18 @@ const (
 	symbolsOutputJSON
 )
 
-func parseSymbolArgs(args []string) (string, symbolsOutputMode, error) {
-	if duplicateFlag(args, "--name") {
-		return "", symbolsOutputOneLine, errors.New("--name can only be provided once")
-	}
+func parseSymbolArgs(args []string) ([]string, symbolsOutputMode, error) {
 	if duplicateFlag(args, "--one-line") {
-		return "", symbolsOutputOneLine, errors.New("--one-line can only be provided once")
+		return nil, symbolsOutputOneLine, errors.New("--one-line can only be provided once")
 	}
 	if duplicateFlag(args, "--nested-json") {
-		return "", symbolsOutputOneLine, errors.New("--nested-json can only be provided once")
+		return nil, symbolsOutputOneLine, errors.New("--nested-json can only be provided once")
 	}
 	if duplicateFlag(args, "--json") {
-		return "", symbolsOutputOneLine, errors.New("--json can only be provided once")
+		return nil, symbolsOutputOneLine, errors.New("--json can only be provided once")
 	}
 
-	var name string
-	hasName := false
+	var names []string
 	outputMode := symbolsOutputOneLine
 	hasOutputMode := false
 	for position := 0; position < len(args); position++ {
@@ -101,41 +97,40 @@ func parseSymbolArgs(args []string) (string, symbolsOutputMode, error) {
 		switch arg {
 		case "--name":
 			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
-				return "", symbolsOutputOneLine, errors.New("--name requires a value")
+				return nil, symbolsOutputOneLine, errors.New("--name requires a value")
 			}
-			name = args[position+1]
-			hasName = true
+			names = append(names, args[position+1])
 			position++
 		case "--one-line":
 			if hasOutputMode {
-				return "", symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
+				return nil, symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
 			}
 			outputMode = symbolsOutputOneLine
 			hasOutputMode = true
 		case "--nested-json":
 			if hasOutputMode {
-				return "", symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
+				return nil, symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
 			}
 			outputMode = symbolsOutputNestedJSON
 			hasOutputMode = true
 		case "--json":
 			if hasOutputMode {
-				return "", symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
+				return nil, symbolsOutputOneLine, errors.New("symbols output flags are mutually exclusive")
 			}
 			outputMode = symbolsOutputJSON
 			hasOutputMode = true
 		case "--flat":
-			return "", symbolsOutputOneLine, errors.New("--flat was renamed to --json")
+			return nil, symbolsOutputOneLine, errors.New("--flat was renamed to --json")
 		default:
-			return "", symbolsOutputOneLine, errors.New("symbols only accepts --name, --one-line, --nested-json, and --json")
+			return nil, symbolsOutputOneLine, errors.New("symbols only accepts --name, --one-line, --nested-json, and --json")
 		}
 	}
 
-	if !hasName {
-		return "", symbolsOutputOneLine, errors.New("missing --name")
+	if len(names) == 0 {
+		return nil, symbolsOutputOneLine, errors.New("missing --name")
 	}
 
-	return name, outputMode, nil
+	return names, outputMode, nil
 }
 
 type oneLineJSONOutputMode int
@@ -180,7 +175,7 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 		return nil, err
 	}
 
-	if !usesName {
+	if !usesName && len(symbols) == 1 {
 		payload, err := implementations.Implementations(traversal.NewView(loaded), symbols[0])
 		if err != nil {
 			return nil, err
@@ -215,7 +210,7 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 		return nil, err
 	}
 
-	if !usesName {
+	if !usesName && len(symbols) == 1 {
 		payload := references.Query(traversal.NewView(loaded), symbols[0])
 		if outputMode == outputJSON {
 			return payload, nil
@@ -276,10 +271,8 @@ func parsePackagePrefixArgs(args []string) (string, oneLineJSONOutputMode, error
 }
 
 type symbolSetArgs struct {
-	symbol    string
-	hasSymbol bool
-	name      string
-	hasName   bool
+	symbols []string
+	names   []string
 }
 
 type referenceQueriesPayload struct {
@@ -315,16 +308,10 @@ func parseAndResolveSymbolSet(
 		return nil, false, outputOneLine, err
 	}
 
-	return symbols, queryArgs.hasName, outputMode, nil
+	return symbols, len(queryArgs.names) > 0, outputMode, nil
 }
 
 func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJSONOutputMode, error) {
-	if duplicateFlag(args, "--symbol") {
-		return symbolSetArgs{}, outputOneLine, errors.New("--symbol can only be provided once")
-	}
-	if duplicateFlag(args, "--name") {
-		return symbolSetArgs{}, outputOneLine, errors.New("--name can only be provided once")
-	}
 	if duplicateFlag(args, "--one-line") {
 		return symbolSetArgs{}, outputOneLine, errors.New("--one-line can only be provided once")
 	}
@@ -342,15 +329,13 @@ func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJS
 			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
 				return symbolSetArgs{}, outputOneLine, errors.New("--symbol requires a value")
 			}
-			queryArgs.symbol = args[position+1]
-			queryArgs.hasSymbol = true
+			queryArgs.symbols = append(queryArgs.symbols, args[position+1])
 			position++
 		case "--name":
 			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
 				return symbolSetArgs{}, outputOneLine, errors.New("--name requires a value")
 			}
-			queryArgs.name = args[position+1]
-			queryArgs.hasName = true
+			queryArgs.names = append(queryArgs.names, args[position+1])
 			position++
 		case "--one-line":
 			if hasOutputMode {
@@ -369,7 +354,7 @@ func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJS
 		}
 	}
 
-	if !queryArgs.hasSymbol && !queryArgs.hasName {
+	if len(queryArgs.symbols) == 0 && len(queryArgs.names) == 0 {
 		return symbolSetArgs{}, outputOneLine, errors.New("missing --symbol or --name")
 	}
 
@@ -378,11 +363,9 @@ func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJS
 
 func resolveSymbolSet(view traversal.View, queryArgs symbolSetArgs) ([]string, error) {
 	symbols := make([]string, 0, 1)
-	if queryArgs.hasSymbol {
-		symbols = append(symbols, queryArgs.symbol)
-	}
-	if queryArgs.hasName {
-		discovered, err := discovery.FlatSymbolsByName(view, queryArgs.name)
+	symbols = append(symbols, queryArgs.symbols...)
+	for _, name := range queryArgs.names {
+		discovered, err := discovery.FlatSymbolsByName(view, name)
 		if err != nil {
 			return nil, err
 		}

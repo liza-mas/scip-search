@@ -109,6 +109,51 @@ func TestSymbolsByNameReturnsOnlyRunMatches(t *testing.T) {
 	})
 }
 
+func TestSymbolsByNamesReturnsUnionInStableSymbolOrder(t *testing.T) {
+	t.Parallel()
+
+	result, err := discovery.FlatSymbolsByNames(discoveryFixtureView(), []string{"Supervisor", "Run"})
+	if err != nil {
+		t.Fatalf("FlatSymbolsByNames() error = %v", err)
+	}
+
+	gotSymbols := collectResultSymbols(result.Symbols)
+	wantSymbols := []string{
+		agentSupervisorSymbol,
+		runSymbol,
+		supervisorSymbol,
+		supervisorConfigSymbol,
+	}
+	if !slices.Equal(gotSymbols, wantSymbols) {
+		t.Fatalf("symbols = %v, want sorted union matches %v", gotSymbols, wantSymbols)
+	}
+}
+
+func TestSymbolsByNamesUsesFirstMatchingNameForMatchContext(t *testing.T) {
+	t.Parallel()
+
+	result, err := discovery.FlatSymbolsByNames(discoveryFixtureView(), []string{"supervisor/", "Supervisor"})
+	if err != nil {
+		t.Fatalf("FlatSymbolsByNames() error = %v", err)
+	}
+
+	var got discovery.SymbolResult
+	found := false
+	for _, symbol := range result.Symbols {
+		if symbol.Symbol == supervisorSymbol {
+			got = symbol
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("symbols = %v, want %q", collectResultSymbols(result.Symbols), supervisorSymbol)
+	}
+	if got.MatchSource != discovery.MatchSourceDescriptor || got.MatchText != "supervisor/Supervisor#" {
+		t.Fatalf("match context = (%s, %q), want first matching name descriptor context", got.MatchSource, got.MatchText)
+	}
+}
+
 func TestSymbolsByNameReturnsExplicitEmptyCollectionForMissingName(t *testing.T) {
 	t.Parallel()
 

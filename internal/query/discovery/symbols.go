@@ -59,7 +59,11 @@ type Definition struct {
 }
 
 func SymbolsByName(view traversal.View, name string) (SymbolPackagesPayload, error) {
-	flat, err := FlatSymbolsByName(view, name)
+	return SymbolsByNames(view, []string{name})
+}
+
+func SymbolsByNames(view traversal.View, names []string) (SymbolPackagesPayload, error) {
+	flat, err := FlatSymbolsByNames(view, names)
 	if err != nil {
 		return SymbolPackagesPayload{}, err
 	}
@@ -99,6 +103,10 @@ func SymbolsByName(view traversal.View, name string) (SymbolPackagesPayload, err
 }
 
 func FlatSymbolsByName(view traversal.View, name string) (SymbolsPayload, error) {
+	return FlatSymbolsByNames(view, []string{name})
+}
+
+func FlatSymbolsByNames(view traversal.View, names []string) (SymbolsPayload, error) {
 	definitions := definitionsBySymbol(view.Occurrences())
 	results := make([]SymbolResult, 0)
 
@@ -111,7 +119,7 @@ func FlatSymbolsByName(view traversal.View, name string) (SymbolsPayload, error)
 			return SymbolsPayload{}, err
 		}
 
-		matchText, matchSource, matched := matchSymbol(identity, symbol.DisplayName, name)
+		matchText, matchSource, matched := matchAnyName(identity, symbol.DisplayName, names)
 		if !matched {
 			continue
 		}
@@ -137,7 +145,11 @@ func FlatSymbolsByName(view traversal.View, name string) (SymbolsPayload, error)
 }
 
 func OneLineSymbolsByName(view traversal.View, name string) (string, error) {
-	flat, err := FlatSymbolsByName(view, name)
+	return OneLineSymbolsByNames(view, []string{name})
+}
+
+func OneLineSymbolsByNames(view traversal.View, names []string) (string, error) {
+	flat, err := FlatSymbolsByNames(view, names)
 	if err != nil {
 		return "", err
 	}
@@ -207,6 +219,16 @@ func symbolsInView(view traversal.View) []traversal.Symbol {
 	}
 	symbols = append(symbols, view.ExternalSymbols()...)
 	return symbols
+}
+
+func matchAnyName(identity scipmodel.Identity, displayName string, names []string) (string, MatchSource, bool) {
+	for _, name := range names {
+		matchText, matchSource, matched := matchSymbol(identity, displayName, name)
+		if matched {
+			return matchText, matchSource, true
+		}
+	}
+	return "", "", false
 }
 
 func matchSymbol(identity scipmodel.Identity, displayName string, name string) (string, MatchSource, bool) {
