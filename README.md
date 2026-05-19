@@ -1,5 +1,53 @@
 # SCIP Search
 
+## A Code Exploration CLI Optimized for Coding Agents
+
+Usage example:
+1. Find relevant symbols
+```bash
+❯ scip-search symbols --index go.scip --name SymbolSource --nested-json
+{"packages":[{"scheme":"scip-go","packageManager":"gomod","packageName":"scip-search","packageVersion":"552d21c479c8","packageKey":"scip-go gomod scip-search 552d21c479c8","symbols":[{"descriptor":"`scip-search/internal/traversal`/SymbolSource#","matchText":"SymbolSource","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[13,5,17]}},{"descriptor":"`scip-search/internal/traversal`/SymbolSourceDocument.","matchText":"SymbolSourceDocument","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[16,1,21]}},{"descriptor":"`scip-search/internal/traversal`/SymbolSourceExternal.","matchText":"SymbolSourceExternal","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[17,1,21]}}]}]}
+```
+2. Locate the symbols
+```bash
+❯ scip-search references --index go.scip --symbol 'scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSource#' --location-only
+internal/traversal/facts.go:17:23
+internal/traversal/facts.go:18:23
+internal/traversal/facts.go:31:25
+internal/traversal/view.go:130:57
+internal/traversal/view_test.go:780:59
+```
+3. Focus read
+```bash
+❯ nl -ba internal/traversal/facts.go | sed -n '17,31p'
+17          SymbolSourceDocument SymbolSource = "document"
+18          SymbolSourceExternal SymbolSource = "external"
+19  )
+20
+21  type Document struct {
+22          RelativePath     string
+23          Language         string
+24          PositionEncoding scip.PositionEncoding
+25          Symbols          []Symbol
+26          Occurrences      []Occurrence
+27  }
+28
+29  type Symbol struct {
+30          Symbol                 string
+31          Source                 SymbolSource
+```
+
+The pattern:
+```
+scip-search symbols --index <path> --name Foo --name Bar --nested-json
+scip-search references --index <path> --symbol '<foo packageKey> <foo descriptor>' --symbol '<bar packageKey> <bar descriptor>' --location-only
+nl -ba <result-path> | sed -n '<first-line>,<last-line>p'
+```
+
+That's the full loop: three Bash calls replacing the 5-10 grep/read round-trips agents typically need.
+
+Not only `scip-search` is token efficient but it also support concurrent indexes for local worktrees.
+
 ## What is SCIP
 
 [SCIP](https://github.com/scip-code/scip) is a language-agnostic Protobuf format for code intelligence, developed by Sourcegraph. It powers Go to Definition, Find References, and Find Implementations across languages. It replaces the older LSIF format.
@@ -39,8 +87,10 @@ scip-go index --module-root /path/to/repo --output /path/to/go.scip
 SCIP uses human-readable string identifiers for symbols. The format is:
 
 ```
-<scheme> <package-manager> <package-name> <package-version> <descriptors>
+<scheme> <packageManager> <packageName> <packageVersion> <descriptor>
 ```
+
+`<scheme> <packageManager> <packageName> <packageVersion>` forms the `packageKey`.
 
 Example Go symbols:
 ```
@@ -70,9 +120,11 @@ Use this value as the exact symbol:
 scip-go gomod scip-search 552d21c479c8 scip-search/internal/traversal/SymbolSource#
 ```
 
-Automation should prefer `symbols --json` and read `.symbols[].symbol`, or call
-`references --name <name>` / `implementations --name <name>` when name-based
-resolution is sufficient.
+Agents should prefer `symbols --nested-json`, which groups symbols by package and avoids repeating package identity per symbol.
+
+The full SCIP symbol for `references --symbol` or `implementations --symbol` is `<packageKey> <descriptor>`.
+
+`--json` repeats `packageKey` on every symbol entry — use it only when flat per-symbol records simplify parsing.
 
 ---
 
