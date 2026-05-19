@@ -49,7 +49,30 @@ scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/traversal`/SymbolSo
 scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#
 ```
 
-`scip-search` resolves partial name queries (e.g. `--name SymbolSource`) to full SCIP symbols. The default `symbols` response is one line per match. `symbols --nested-json` groups matching descriptors by package to reduce repeated package identity text. A full SCIP symbol can be reconstructed as `<packageKey> <descriptor>` from one-line or nested JSON output and used in subsequent `references` or `implementations` calls. The package version comes from the indexed checkout and varies by commit.
+`scip-search` resolves partial name queries (e.g. `--name SymbolSource`) to full SCIP symbols.
+The default `symbols` response is one line per match.
+`symbols --nested-json` groups matching descriptors by package to reduce repeated package identity text.
+A full SCIP symbol can be reconstructed as `<packageKey> <descriptor>` from one-line or nested JSON output and used in
+subsequent `references` or `implementations` calls.
+The package version comes from the indexed checkout and varies by commit.
+
+In default one-line `symbols` output, the value to pass to `references --symbol`
+or `implementations --symbol` is the metadata after the third colon up to, but
+not including, ` match=`:
+
+```text
+internal/traversal/facts.go:14:6:scip-go gomod scip-search 552d21c479c8 scip-search/internal/traversal/SymbolSource# match=displayName text=SymbolSource
+```
+
+Use this value as the exact symbol:
+
+```text
+scip-go gomod scip-search 552d21c479c8 scip-search/internal/traversal/SymbolSource#
+```
+
+Automation should prefer `symbols --json` and read `.symbols[].symbol`, or call
+`references --name <name>` / `implementations --name <name>` when name-based
+resolution is sufficient.
 
 ---
 
@@ -153,6 +176,42 @@ ast-grep --pattern 'return nil, errors.New($$$)' --lang go .
 
 Handles multiple languages natively by file extension — no per-language invocation needed.
 
+**[ripgrep](https://github.com/BurntSushi/ripgrep)** (not built here)
+
+A fast raw text and file discovery tool that scans the current worktree.
+Covers the query class that `scip-search` intentionally avoids: filenames,
+comments, string literals, testdata, golden files, generated artifacts, and any
+text that may not be an indexed symbol.
+
+```bash
+rg -n "LoadSharedFixture|DisplayName" internal cmd -g'*.go'
+rg --files | rg 'traversaltest|fixture|golden'
+```
+
+`rg` always reflects the files on disk. `scip-search` reflects the supplied SCIP
+index, which may be older than the worktree until the index is regenerated.
+Because `rg` is purely textual, it can return comments, strings, and other
+incidental matches; `scip-search` only returns matches that SCIP indexed as
+symbols.
+
+Use the tools by question shape:
+
+- Use `scip-search` when the index should decide what a symbol is: definitions,
+  references, implementations, and package identities. It filters out many
+  accidental text matches and can follow SCIP relationships.
+- Use `ast-grep` when syntax matters more than symbol identity: function
+  signatures, call forms, struct literals, return statements, and other
+  language-aware patterns.
+- Use `rg` when raw worktree discovery is the goal: filenames, arbitrary text,
+  comments, strings, fixtures, and files outside the SCIP index.
+
+For example, `rg -n "LoadSharedFixture|DisplayName" internal cmd -g'*.go'`
+finds every textual occurrence. `scip-search symbols --name LoadSharedFixture`
+finds the indexed function definition, and `scip-search references --name
+LoadSharedFixture` finds semantic call sites. Conversely,
+`rg --files | rg 'traversaltest|fixture|golden'` is a filesystem query; SCIP
+does not model arbitrary filenames or JSON golden files.
+
 | Question | Tool |
 |---|---|
 | Where is `SymbolSource` defined? | `scip-search symbols` |
@@ -161,6 +220,8 @@ Handles multiple languages natively by file extension — no per-language invoca
 | What packages exist? | `scip-search packages` |
 | Find all functions returning unwrapped errors | `ast-grep` |
 | Find all struct literals missing field `Timeout` | `ast-grep` |
+| Find every textual mention of `DisplayName` | `rg` |
+| Find fixture or golden files by path | `rg --files \| rg 'fixture\|golden'` |
 
 ---
 
