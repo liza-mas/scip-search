@@ -133,11 +133,12 @@ func parseSymbolArgs(args []string) ([]string, symbolsOutputMode, error) {
 	return names, outputMode, nil
 }
 
-type oneLineJSONOutputMode int
+type queryOutputMode int
 
 const (
-	outputOneLine oneLineJSONOutputMode = iota
+	outputOneLine queryOutputMode = iota
 	outputJSON
+	outputLocationOnly
 )
 
 type packagesHandler struct{}
@@ -183,6 +184,9 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 		if outputMode == outputJSON {
 			return payload, nil
 		}
+		if outputMode == outputLocationOnly {
+			return runtimecontract.RawOutput{Text: implementations.LocationOnly(payload)}, nil
+		}
 
 		return runtimecontract.RawOutput{Text: implementations.OneLine(payload)}, nil
 	}
@@ -193,6 +197,9 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 	}
 	if outputMode == outputJSON {
 		return payload, nil
+	}
+	if outputMode == outputLocationOnly {
+		return runtimecontract.RawOutput{Text: locationOnlyImplementationQueries(payload)}, nil
 	}
 
 	return runtimecontract.RawOutput{Text: oneLineImplementationQueries(payload)}, nil
@@ -215,6 +222,9 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 		if outputMode == outputJSON {
 			return payload, nil
 		}
+		if outputMode == outputLocationOnly {
+			return runtimecontract.RawOutput{Text: references.LocationOnly(payload)}, nil
+		}
 
 		return runtimecontract.RawOutput{Text: references.OneLine(payload)}, nil
 	}
@@ -223,11 +233,14 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if outputMode == outputJSON {
 		return payload, nil
 	}
+	if outputMode == outputLocationOnly {
+		return runtimecontract.RawOutput{Text: locationOnlyReferenceQueries(payload)}, nil
+	}
 
 	return runtimecontract.RawOutput{Text: oneLineReferenceQueries(payload)}, nil
 }
 
-func parsePackagePrefixArgs(args []string) (string, oneLineJSONOutputMode, error) {
+func parsePackagePrefixArgs(args []string) (string, queryOutputMode, error) {
 	if duplicateFlag(args, "--prefix") {
 		return "", outputOneLine, errors.New("--prefix can only be provided once")
 	}
@@ -297,7 +310,7 @@ func parseAndResolveSymbolSet(
 	view traversal.View,
 	args []string,
 	command string,
-) ([]string, bool, oneLineJSONOutputMode, error) {
+) ([]string, bool, queryOutputMode, error) {
 	queryArgs, outputMode, err := parseSymbolSetArgs(args, command)
 	if err != nil {
 		return nil, false, outputOneLine, err
@@ -311,12 +324,15 @@ func parseAndResolveSymbolSet(
 	return symbols, len(queryArgs.names) > 0, outputMode, nil
 }
 
-func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJSONOutputMode, error) {
+func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, queryOutputMode, error) {
 	if duplicateFlag(args, "--one-line") {
 		return symbolSetArgs{}, outputOneLine, errors.New("--one-line can only be provided once")
 	}
 	if duplicateFlag(args, "--json") {
 		return symbolSetArgs{}, outputOneLine, errors.New("--json can only be provided once")
+	}
+	if duplicateFlag(args, "--location-only") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--location-only can only be provided once")
 	}
 
 	var queryArgs symbolSetArgs
@@ -349,11 +365,23 @@ func parseSymbolSetArgs(args []string, command string) (symbolSetArgs, oneLineJS
 			}
 			outputMode = outputJSON
 			hasOutputMode = true
+		case "--location-only":
+			if hasOutputMode {
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputLocationOnly
+			hasOutputMode = true
 		default:
-			return symbolSetArgs{}, outputOneLine, errors.New(command + " only accepts --symbol, --name, --one-line, and --json")
+			return symbolSetArgs{}, outputOneLine, errors.New(command + " only accepts --symbol, --name, --one-line, --json, and --location-only")
 		}
 	}
 
+	if outputMode == outputLocationOnly && len(queryArgs.names) > 0 {
+		return symbolSetArgs{}, outputOneLine, errors.New("--location-only cannot be used with --name")
+	}
+	if outputMode == outputLocationOnly && len(queryArgs.symbols) == 0 {
+		return symbolSetArgs{}, outputOneLine, errors.New("--location-only requires --symbol")
+	}
 	if len(queryArgs.symbols) == 0 && len(queryArgs.names) == 0 {
 		return symbolSetArgs{}, outputOneLine, errors.New("missing --symbol or --name")
 	}
@@ -434,6 +462,24 @@ func oneLineReferenceQueries(payload referenceQueriesPayload) string {
 	return builder.String()
 }
 
+func locationOnlyReferenceQueries(payload referenceQueriesPayload) string {
+	var builder strings.Builder
+	seen := map[referenceOutputKey]struct{}{}
+	for _, query := range payload.Queries {
+		for _, reference := range query.References {
+			key := keyReferenceOutput(reference)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			path, line, column := oneline.Location(reference.DocumentPath, reference.Range)
+			fmt.Fprintf(&builder, "%s:%d:%d\n", path, line, column)
+		}
+	}
+	return builder.String()
+}
+
 func keyReferenceOutput(reference references.Reference) referenceOutputKey {
 	key := referenceOutputKey{
 		symbol:       reference.Symbol,
@@ -454,6 +500,14 @@ func oneLineImplementationQueries(payload implementationQueriesPayload) string {
 	var builder strings.Builder
 	for _, query := range payload.Queries {
 		builder.WriteString(implementations.OneLine(query))
+	}
+	return builder.String()
+}
+
+func locationOnlyImplementationQueries(payload implementationQueriesPayload) string {
+	var builder strings.Builder
+	for _, query := range payload.Queries {
+		builder.WriteString(implementations.LocationOnly(query))
 	}
 	return builder.String()
 }

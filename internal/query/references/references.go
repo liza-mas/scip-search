@@ -73,6 +73,20 @@ func OneLine(payload Payload) string {
 	return builder.String()
 }
 
+func LocationOnly(payload Payload) string {
+	if len(payload.References) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, reference := range payload.References {
+		path, line, column := oneline.Location(reference.DocumentPath, reference.Range)
+		fmt.Fprintf(&builder, "%s:%d:%d\n", path, line, column)
+	}
+
+	return builder.String()
+}
+
 func referenceCandidateSymbols(view traversal.View, symbol string) map[string]struct{} {
 	seen := map[string]struct{}{symbol: {}}
 

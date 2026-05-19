@@ -93,6 +93,20 @@ func OneLine(payload Payload) string {
 	return builder.String()
 }
 
+func LocationOnly(payload Payload) string {
+	if len(payload.Implementations) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, implementation := range payload.Implementations {
+		path, line, column := oneline.Location(implementation.DocumentPath, implementation.Range)
+		fmt.Fprintf(&builder, "%s:%d:%d\n", path, line, column)
+	}
+
+	return builder.String()
+}
+
 type definition struct {
 	DocumentPath string
 	Range        []int32

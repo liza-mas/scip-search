@@ -95,17 +95,20 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"Search a pre-built SCIP index for symbols, references, implementations, and packages.",
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]",
-		"scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]",
-		"scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]",
+		"scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
+		"scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
+		"--location-only  Location-only text output for exact-symbol references and implementations.",
 		"--nested-json  Compact package-grouped JSON output for symbols only.",
 		"One-line formats:",
 		"symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>",
 		"references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>",
 		"implementations  <path>:<line>:<column>:<implementation-symbol>",
+		"location-only    <path>:<line>:<column>",
 		"symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.",
+		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
 		"Repeated results are de-duplicated.",
 		"references and implementations require --symbol, --name, or both.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
@@ -593,6 +596,36 @@ func TestRunProductionImplementationsCommandAcceptsJSONOutput(t *testing.T) {
 	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json")
 }
 
+func TestRunProductionImplementationsCommandAcceptsLocationOnlyOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"implementations",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.ImplSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--location-only",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("implementations --location-only status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	want := "cmd/alpha.go:3:7\n"
+	if stdout.String() != want {
+		t.Fatalf("implementations --location-only stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
 func TestRunProductionImplementationsCommandAcceptsNameResolution(t *testing.T) {
 	t.Parallel()
 
@@ -765,6 +798,40 @@ func TestRunProductionReferencesCommandAcceptsJSONOutput(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-beta.json")
+}
+
+func TestRunProductionReferencesCommandAcceptsLocationOnlyOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"references",
+		"--index",
+		fixture.IndexPath,
+		"--symbol",
+		traversaltest.BetaSymbol,
+		"--symbol",
+		traversaltest.AlphaSymbol,
+		"--location-only",
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references --location-only status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	want := strings.Join([]string{
+		"cmd/alpha.go:9:2",
+		"pkg/beta.go:13:5",
+		"",
+	}, "\n")
+	if stdout.String() != want {
+		t.Fatalf("references --location-only stdout = %q, want %q", stdout.String(), want)
+	}
 }
 
 func TestRunProductionReferencesCommandAcceptsNameResolution(t *testing.T) {
@@ -1052,6 +1119,21 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--unknown"},
 		},
 		{
+			name:    "references duplicate location-only",
+			command: "references",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--location-only", "--location-only"},
+		},
+		{
+			name:    "references location-only conflicts with json",
+			command: "references",
+			args:    []string{"--symbol", traversaltest.AlphaSymbol, "--location-only", "--json"},
+		},
+		{
+			name:    "references location-only rejects name",
+			command: "references",
+			args:    []string{"--name", "Alpha", "--location-only"},
+		},
+		{
 			name:    "references stray positional before symbol",
 			command: "references",
 			args:    []string{"stray", "--symbol", traversaltest.AlphaSymbol},
@@ -1090,6 +1172,21 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			name:    "implementations unknown trailing flag",
 			command: "implementations",
 			args:    []string{"--symbol", traversaltest.ImplSymbol, "--unknown"},
+		},
+		{
+			name:    "implementations duplicate location-only",
+			command: "implementations",
+			args:    []string{"--symbol", traversaltest.ImplSymbol, "--location-only", "--location-only"},
+		},
+		{
+			name:    "implementations location-only conflicts with one-line",
+			command: "implementations",
+			args:    []string{"--symbol", traversaltest.ImplSymbol, "--location-only", "--one-line"},
+		},
+		{
+			name:    "implementations location-only rejects name",
+			command: "implementations",
+			args:    []string{"--name", "Runnable", "--location-only"},
 		},
 		{
 			name:    "implementations stray positional before symbol",
@@ -1216,6 +1313,16 @@ func TestRunProductionReferencesSymbolUsageFailures(t *testing.T) {
 			args: []string{"--symbol", ""},
 			want: "--symbol requires a value",
 		},
+		{
+			name: "location-only missing symbol",
+			args: []string{"--location-only"},
+			want: "--location-only requires --symbol",
+		},
+		{
+			name: "location-only rejects name",
+			args: []string{"--name", "Alpha", "--location-only"},
+			want: "--location-only cannot be used with --name",
+		},
 	}
 
 	for _, test := range tests {
@@ -1310,6 +1417,16 @@ func TestRunProductionImplementationsMissingSymbolRemainsUsageFailure(t *testing
 			name: "empty symbol",
 			args: []string{"--symbol", ""},
 			want: "--symbol requires a value",
+		},
+		{
+			name: "location-only missing symbol",
+			args: []string{"--location-only"},
+			want: "--location-only requires --symbol",
+		},
+		{
+			name: "location-only rejects name",
+			args: []string{"--name", "Runnable", "--location-only"},
+			want: "--location-only cannot be used with --name",
 		},
 	}
 

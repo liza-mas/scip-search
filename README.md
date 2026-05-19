@@ -91,8 +91,8 @@ Cold start is milliseconds — loads a pre-built binary index, performs no compi
 scip-search --help
 scip-search --version
 scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]
-scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
-scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
+scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
+scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
 scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 ```
 
@@ -132,7 +132,13 @@ Default reference and implementation output also use one source-location-prefixe
 <path>:<line>:<column>:<implementation-symbol>
 ```
 
-`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload. `references` and `implementations` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value.
+`--location-only` selects source locations without metadata for exact-symbol reference and implementation queries:
+
+```text
+<path>:<line>:<column>
+```
+
+`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload. `references` and `implementations` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value. `--location-only` for `references` and `implementations` requires `--symbol` and cannot be used with `--name`.
 
 In one-line output, `line` and `column` are the SCIP range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols or implementations without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata after the third colon is grep-style human-readable text. `symbols` match text escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line. `packages` one-line output writes one package key per line.
 

@@ -24,8 +24,8 @@ Usage:
   scip-search --help
   scip-search --version
   scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]
-  scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
-  scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json]
+  scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
+  scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
   scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
 
 Commands:
@@ -38,15 +38,18 @@ Output:
   --one-line     Grep-style text output; default for all query commands.
   --json         Structured JSON output.
   --nested-json  Compact package-grouped JSON output for symbols only.
+  --location-only  Location-only text output for exact-symbol references and implementations.
 
 One-line formats:
   symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>
   references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>
   implementations  <path>:<line>:<column>:<implementation-symbol>
+  location-only    <path>:<line>:<column>
   packages         <packageKey>
 
 Notes:
   symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.
+  --location-only for references and implementations requires --symbol and cannot be used with --name.
   Repeated results are de-duplicated.
   references and implementations require --symbol, --name, or both.
   Reads an existing SCIP index; does not generate, update, or discover indexes.

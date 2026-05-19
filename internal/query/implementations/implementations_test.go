@@ -150,11 +150,48 @@ func TestOneLineFormatsImplementationLocations(t *testing.T) {
 	}
 }
 
+func TestLocationOnlyFormatsImplementationLocations(t *testing.T) {
+	t.Parallel()
+
+	payload := implementations.Payload{
+		Implementations: []implementations.Result{
+			{
+				ImplementationSymbol: firstImplementation,
+				DocumentPath:         "impl/alpha.go",
+				Range:                []int32{4, 5, 14},
+			},
+			{
+				ImplementationSymbol: secondImplementation,
+				DocumentPath:         "impl/beta.go",
+				Range:                []int32{8},
+			},
+			{
+				ImplementationSymbol: externalImplementation,
+			},
+		},
+	}
+
+	want := "impl/alpha.go:5:6\n" +
+		"impl/beta.go:0:0\n" +
+		"?:0:0\n"
+	if got := implementations.LocationOnly(payload); got != want {
+		t.Fatalf("LocationOnly() = %q, want %q", got, want)
+	}
+}
+
 func TestOneLineReturnsEmptyOutputForEmptyImplementationPayload(t *testing.T) {
 	t.Parallel()
 
 	if got := implementations.OneLine(implementations.Payload{Implementations: []implementations.Result{}}); got != "" {
 		t.Fatalf("OneLine(empty) = %q, want empty", got)
+	}
+}
+
+func TestLocationOnlyReturnsEmptyOutputForEmptyImplementationPayload(t *testing.T) {
+	t.Parallel()
+
+	if got := implementations.LocationOnly(implementations.Payload{Implementations: []implementations.Result{}}); got != "" {
+		t.Fatalf("LocationOnly(empty) = %q, want empty", got)
 	}
 }
 

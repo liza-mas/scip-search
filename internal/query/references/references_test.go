@@ -146,11 +146,52 @@ func TestOneLineFormatsReferenceLocationsAndRoles(t *testing.T) {
 	}
 }
 
+func TestLocationOnlyFormatsReferenceLocations(t *testing.T) {
+	t.Parallel()
+
+	payload := references.Payload{
+		References: []references.Reference{
+			{
+				Symbol:       querySymbol,
+				DocumentPath: "cmd/query.go",
+				Range:        []int32{8, 1, 8, 15},
+				Roles:        int32(scip.SymbolRole_ReadAccess),
+			},
+			{
+				Symbol:       incomingSymbol,
+				DocumentPath: "pkg/incoming.go",
+				Range:        []int32{9},
+				Roles:        int32(scip.SymbolRole_WriteAccess),
+			},
+			{
+				Symbol: relatedSymbol,
+				Range:  []int32{10, 2, 14},
+				Roles:  int32(scip.SymbolRole_ReadAccess),
+			},
+		},
+	}
+
+	want := "cmd/query.go:9:2\n" +
+		"pkg/incoming.go:0:0\n" +
+		"?:0:0\n"
+	if got := references.LocationOnly(payload); got != want {
+		t.Fatalf("LocationOnly() = %q, want %q", got, want)
+	}
+}
+
 func TestOneLineReturnsEmptyOutputForEmptyReferencePayload(t *testing.T) {
 	t.Parallel()
 
 	if got := references.OneLine(references.Payload{References: []references.Reference{}}); got != "" {
 		t.Fatalf("OneLine(empty) = %q, want empty", got)
+	}
+}
+
+func TestLocationOnlyReturnsEmptyOutputForEmptyReferencePayload(t *testing.T) {
+	t.Parallel()
+
+	if got := references.LocationOnly(references.Payload{References: []references.Reference{}}); got != "" {
+		t.Fatalf("LocationOnly(empty) = %q, want empty", got)
 	}
 }
 
