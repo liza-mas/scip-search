@@ -103,9 +103,9 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"--location-only  Location-only text output for exact-symbol references and implementations.",
 		"--nested-json  Compact package-grouped JSON output for symbols only.",
 		"One-line formats:",
-		"symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>",
-		"references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>",
-		"implementations  <path>:<line>:<column>:<implementation-symbol>",
+		"symbols          <path>:<line>:<column> symbol=\"<packageKey> <descriptor>\"; match=<source>; text=<text>",
+		"references       <path>:<line>:<column> symbol=\"<referenced-symbol>\"; roles=<roles>",
+		"implementations  <path>:<line>:<column> symbol=\"<implementation-symbol>\"",
 		"location-only    <path>:<line>:<column>",
 		"symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.",
 		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
@@ -339,9 +339,9 @@ func TestRunProductionSymbolsCommandDefaultsToOneLineOutput(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := strings.Join([]string{
-		"supervisor/run.go:15:6:scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent# match=displayName text=SupervisorAgent",
-		"supervisor/supervisor.go:11:6:scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor# match=displayName text=Supervisor",
-		"supervisor/supervisor.go:19:6:scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig# match=descriptor text=supervisor/SupervisorConfig#",
+		"supervisor/run.go:15:6 symbol=\"scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#\"; match=displayName; text=SupervisorAgent",
+		"supervisor/supervisor.go:11:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#\"; match=displayName; text=Supervisor",
+		"supervisor/supervisor.go:19:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#\"; match=descriptor; text=supervisor/SupervisorConfig#",
 		"",
 	}, "\n")
 	if stdout.String() != want {
@@ -364,7 +364,7 @@ func TestRunProductionSymbolsCommandAcceptsExplicitOneLineOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	if want := "supervisor/run.go:7:6:scip-go gomod github.com/liza-mas/liza . supervisor/Run(). match=displayName text=Run\n"; stdout.String() != want {
+	if want := "supervisor/run.go:7:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Run().\"; match=displayName; text=Run\n"; stdout.String() != want {
 		t.Fatalf("symbols --one-line stdout = %q, want %q", stdout.String(), want)
 	}
 }
@@ -572,7 +572,7 @@ func TestRunProductionImplementationsCommandDefaultsToOneLineOutput(t *testing.T
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	want := "cmd/alpha.go:3:7:scip-go gomod example.com/fixture . cmd/Alpha().\n"
+	want := "cmd/alpha.go:3:7 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"\n"
 	if stdout.String() != want {
 		t.Fatalf("implementations stdout = %q, want one-line output %q", stdout.String(), want)
 	}
@@ -641,7 +641,7 @@ func TestRunProductionImplementationsCommandAcceptsNameResolution(t *testing.T) 
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	want := "impl/concrete.go:4:3:scip-go gomod example.com/name . impl/ConcreteDoer#\n"
+	want := "impl/concrete.go:4:3 symbol=\"scip-go gomod example.com/name . impl/ConcreteDoer#\"\n"
 	if stdout.String() != want {
 		t.Fatalf("implementations --name stdout = %q, want one-line output %q", stdout.String(), want)
 	}
@@ -773,8 +773,8 @@ func TestRunProductionReferencesCommandDefaultsToOneLineOutput(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := strings.Join([]string{
-		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
-		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"cmd/alpha.go:9:2 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"; roles=8",
+		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
 	if stdout.String() != want {
@@ -850,8 +850,8 @@ func TestRunProductionReferencesCommandAcceptsNameResolution(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := strings.Join([]string{
-		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
-		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"cmd/alpha.go:9:2 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"; roles=8",
+		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
 	if stdout.String() != want {
@@ -875,8 +875,8 @@ func TestRunProductionReferencesCommandNameResolutionDeduplicatesRelatedSymbols(
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := strings.Join([]string{
-		"cmd/alpha.go:9:2:scip-go gomod example.com/fixture . cmd/Alpha(). roles=8",
-		"pkg/beta.go:13:5:scip-go gomod example.com/fixture . pkg/Beta# roles=8",
+		"cmd/alpha.go:9:2 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"; roles=8",
+		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
 	if stdout.String() != want {

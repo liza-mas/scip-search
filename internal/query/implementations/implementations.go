@@ -82,11 +82,11 @@ func OneLine(payload Payload) string {
 		path, line, column := oneline.Location(implementation.DocumentPath, implementation.Range)
 		fmt.Fprintf(
 			&builder,
-			"%s:%d:%d:%s\n",
+			"%s:%d:%d symbol=%s\n",
 			path,
 			line,
 			column,
-			implementation.ImplementationSymbol,
+			oneline.Quote(implementation.ImplementationSymbol),
 		)
 	}
 

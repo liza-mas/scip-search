@@ -17,6 +17,7 @@ const (
 	querySymbol      = "scip-go gomod example.com/project . pkg/Query#"
 	relatedSymbol    = "scip-go gomod example.com/project . pkg/Related#"
 	incomingSymbol   = "scip-go gomod example.com/project . pkg/Incoming#"
+	delimiterSymbol  = "scip-go gomod example.com/project . `pkg/Semi; match=Trap`#"
 	transitiveSymbol = "scip-go gomod example.com/project . pkg/Transitive#"
 	unrelatedSymbol  = "scip-go gomod example.com/project . pkg/Unrelated#"
 )
@@ -138,9 +139,29 @@ func TestOneLineFormatsReferenceLocationsAndRoles(t *testing.T) {
 		},
 	}
 
-	want := "cmd/query.go:9:2:scip-go gomod example.com/project . pkg/Query# roles=8\n" +
-		"pkg/incoming.go:0:0:scip-go gomod example.com/project . pkg/Incoming# roles=4\n" +
-		"?:0:0:scip-go gomod example.com/project . pkg/Related# roles=8\n"
+	want := "cmd/query.go:9:2 symbol=\"scip-go gomod example.com/project . pkg/Query#\"; roles=8\n" +
+		"pkg/incoming.go:0:0 symbol=\"scip-go gomod example.com/project . pkg/Incoming#\"; roles=4\n" +
+		"?:0:0 symbol=\"scip-go gomod example.com/project . pkg/Related#\"; roles=8\n"
+	if got := references.OneLine(payload); got != want {
+		t.Fatalf("OneLine() = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineQuotesReferenceSymbolDelimiterText(t *testing.T) {
+	t.Parallel()
+
+	payload := references.Payload{
+		References: []references.Reference{
+			{
+				Symbol:       delimiterSymbol,
+				DocumentPath: "pkg/semi.go",
+				Range:        []int32{3, 4, 12},
+				Roles:        int32(scip.SymbolRole_ReadAccess),
+			},
+		},
+	}
+
+	want := "pkg/semi.go:4:5 symbol=\"scip-go gomod example.com/project . `pkg/Semi; match=Trap`#\"; roles=8\n"
 	if got := references.OneLine(payload); got != want {
 		t.Fatalf("OneLine() = %q, want %q", got, want)
 	}

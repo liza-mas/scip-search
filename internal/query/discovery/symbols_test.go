@@ -20,6 +20,7 @@ const (
 	supervisorConfigSymbol    = "scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#"
 	supervisorSymbol          = "scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#"
 	escapedMatchSymbol        = "scip-go gomod github.com/liza-mas/liza . supervisor/Escaped#"
+	semicolonDelimiterSymbol  = "scip-go gomod github.com/liza-mas/liza . `supervisor/Semi; match=Trap`#"
 	shortRangeSymbol          = "scip-go gomod github.com/liza-mas/liza . supervisor/ShortRange#"
 	runSymbol                 = "scip-go gomod github.com/liza-mas/liza . supervisor/Run()."
 )
@@ -275,9 +276,9 @@ func TestOneLineSymbolsByNameFormatsStableGrepStyleLines(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"?:0:0:scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent# match=displayName text=SupervisorAgent",
-		"supervisor/supervisor.go:11:6:scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor# match=displayName text=Supervisor",
-		"?:0:0:scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig# match=descriptor text=supervisor/SupervisorConfig#",
+		"?:0:0 symbol=\"scip-go gomod github.com/liza-mas/liza . agent/SupervisorAgent#\"; match=displayName; text=SupervisorAgent",
+		"supervisor/supervisor.go:11:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Supervisor#\"; match=displayName; text=Supervisor",
+		"?:0:0 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#\"; match=descriptor; text=supervisor/SupervisorConfig#",
 		"",
 	}, "\n")
 	if got != want {
@@ -305,7 +306,21 @@ func TestOneLineSymbolsByNameEscapesMatchTextControls(t *testing.T) {
 		t.Fatalf("OneLineSymbolsByName() error = %v", err)
 	}
 
-	want := "supervisor/supervisor.go:31:3:scip-go gomod github.com/liza-mas/liza . supervisor/Escaped# match=displayName text=Escaped\\\\Name\\nWith\\rTab\\tEnd\n"
+	want := "supervisor/supervisor.go:31:3 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Escaped#\"; match=displayName; text=Escaped\\\\Name\\nWith\\rTab\\tEnd\n"
+	if got != want {
+		t.Fatalf("one-line output = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineSymbolsByNameQuotesSymbolDelimiterText(t *testing.T) {
+	t.Parallel()
+
+	got, err := discovery.OneLineSymbolsByName(discoveryFixtureView(), "SemiDelimiter")
+	if err != nil {
+		t.Fatalf("OneLineSymbolsByName() error = %v", err)
+	}
+
+	want := "supervisor/supervisor.go:42:4 symbol=\"scip-go gomod github.com/liza-mas/liza . `supervisor/Semi; match=Trap`#\"; match=displayName; text=SemiDelimiter\n"
 	if got != want {
 		t.Fatalf("one-line output = %q, want %q", got, want)
 	}
@@ -319,7 +334,7 @@ func TestOneLineSymbolsByNameFallsBackForShortDefinitionRange(t *testing.T) {
 		t.Fatalf("OneLineSymbolsByName() error = %v", err)
 	}
 
-	want := "supervisor/supervisor.go:0:0:scip-go gomod github.com/liza-mas/liza . supervisor/ShortRange# match=displayName text=ShortRange\n"
+	want := "supervisor/supervisor.go:0:0 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/ShortRange#\"; match=displayName; text=ShortRange\n"
 	if got != want {
 		t.Fatalf("one-line output = %q, want %q", got, want)
 	}
@@ -337,6 +352,7 @@ func discoveryFixtureView() traversal.View {
 						{Symbol: lowercaseSupervisorSymbol, DisplayName: "supervisor"},
 						{Symbol: supervisorSymbol, DisplayName: "Supervisor"},
 						{Symbol: escapedMatchSymbol, DisplayName: "Escaped\\Name\nWith\rTab\tEnd"},
+						{Symbol: semicolonDelimiterSymbol, DisplayName: "SemiDelimiter"},
 						{Symbol: shortRangeSymbol, DisplayName: "ShortRange"},
 					},
 					Occurrences: []*scip.Occurrence{
@@ -353,6 +369,11 @@ func discoveryFixtureView() traversal.View {
 						{
 							Symbol:      shortRangeSymbol,
 							Range:       []int32{40},
+							SymbolRoles: int32(scip.SymbolRole_Definition),
+						},
+						{
+							Symbol:      semicolonDelimiterSymbol,
+							Range:       []int32{41, 3, 8},
 							SymbolRoles: int32(scip.SymbolRole_Definition),
 						},
 					},

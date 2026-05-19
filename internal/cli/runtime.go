@@ -41,9 +41,9 @@ Output:
   --location-only  Location-only text output for exact-symbol references and implementations.
 
 One-line formats:
-  symbols          <path>:<line>:<column>:<packageKey> <descriptor> match=<source> text=<text>
-  references       <path>:<line>:<column>:<referenced-symbol> roles=<roles>
-  implementations  <path>:<line>:<column>:<implementation-symbol>
+  symbols          <path>:<line>:<column> symbol="<packageKey> <descriptor>"; match=<source>; text=<text>
+  references       <path>:<line>:<column> symbol="<referenced-symbol>"; roles=<roles>
+  implementations  <path>:<line>:<column> symbol="<implementation-symbol>"
   location-only    <path>:<line>:<column>
   packages         <packageKey>
 

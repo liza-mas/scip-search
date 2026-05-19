@@ -7,6 +7,7 @@ import (
 
 	"github.com/scip-code/scip/bindings/go/scip"
 
+	"scip-search/internal/query/oneline"
 	"scip-search/internal/scipmodel"
 	"scip-search/internal/traversal"
 )
@@ -159,19 +160,14 @@ func OneLineSymbolsByNames(view traversal.View, names []string) (string, error) 
 
 	var builder strings.Builder
 	for _, symbol := range flat.Symbols {
-		identity, err := scipmodel.ParseIdentity(symbol.Symbol)
-		if err != nil {
-			return "", err
-		}
 		path, line, column := oneLineLocation(symbol.Definition)
 		fmt.Fprintf(
 			&builder,
-			"%s:%d:%d:%s %s match=%s text=%s\n",
+			"%s:%d:%d symbol=%s; match=%s; text=%s\n",
 			path,
 			line,
 			column,
-			identity.PackageKey(),
-			identity.Descriptor,
+			oneline.Quote(symbol.Symbol),
 			symbol.MatchSource,
 			escapeOneLineValue(symbol.MatchText),
 		)

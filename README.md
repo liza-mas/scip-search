@@ -5,8 +5,10 @@
 Usage example:
 1. Find relevant symbols
 ```bash
-❯ scip-search symbols --index go.scip --name SymbolSource --nested-json
-{"packages":[{"scheme":"scip-go","packageManager":"gomod","packageName":"scip-search","packageVersion":"552d21c479c8","packageKey":"scip-go gomod scip-search 552d21c479c8","symbols":[{"descriptor":"`scip-search/internal/traversal`/SymbolSource#","matchText":"SymbolSource","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[13,5,17]}},{"descriptor":"`scip-search/internal/traversal`/SymbolSourceDocument.","matchText":"SymbolSourceDocument","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[16,1,21]}},{"descriptor":"`scip-search/internal/traversal`/SymbolSourceExternal.","matchText":"SymbolSourceExternal","matchSource":"displayName","definition":{"documentPath":"internal/traversal/facts.go","range":[17,1,21]}}]}]}
+❯ scip-search symbols --index go.scip --name SymbolSource
+internal/traversal/facts.go:14:6 symbol="scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSource#"; match=displayName; text=SymbolSource
+internal/traversal/facts.go:17:2 symbol="scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSourceDocument."; match=displayName; text=SymbolSourceDocument
+internal/traversal/facts.go:18:2 symbol="scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSourceExternal."; match=displayName; text=SymbolSourceExternal
 ```
 2. Locate the symbols
 ```bash
@@ -39,8 +41,8 @@ internal/traversal/view_test.go:780:59
 
 The pattern:
 ```
-scip-search symbols --index <path> --name Foo --name Bar --nested-json
-scip-search references --index <path> --symbol '<foo packageKey> <foo descriptor>' --symbol '<bar packageKey> <bar descriptor>' --location-only
+scip-search symbols --index <path> --name Foo --name Bar
+scip-search references --index <path> --symbol '<exact-foo>' --symbol '<exact-bar>' --location-only
 nl -ba <result-path> | sed -n '<first-line>,<last-line>p'
 ```
 
@@ -107,24 +109,21 @@ subsequent `references` or `implementations` calls.
 The package version comes from the indexed checkout and varies by commit.
 
 In default one-line `symbols` output, the value to pass to `references --symbol`
-or `implementations --symbol` is the metadata after the third colon up to, but
-not including, ` match=`:
+or `implementations --symbol` is the JSON string after `symbol=`. Decode that
+JSON string to recover the exact SCIP symbol:
 
 ```text
-internal/traversal/facts.go:14:6:scip-go gomod scip-search 552d21c479c8 scip-search/internal/traversal/SymbolSource# match=displayName text=SymbolSource
+internal/traversal/facts.go:14:6 symbol="scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSource#"; match=displayName; text=SymbolSource
 ```
 
-Use this value as the exact symbol:
+Use the decoded value as the exact symbol:
 
 ```text
-scip-go gomod scip-search 552d21c479c8 scip-search/internal/traversal/SymbolSource#
+scip-go gomod scip-search 552d21c479c8 `scip-search/internal/traversal`/SymbolSource#
 ```
 
-Agents should prefer `symbols --nested-json`, which groups symbols by package and avoids repeating package identity per symbol.
-
-The full SCIP symbol for `references --symbol` or `implementations --symbol` is `<packageKey> <descriptor>`.
-
-`--json` repeats `packageKey` on every symbol entry — use it only when flat per-symbol records simplify parsing.
+Automation should prefer `symbols --json` to ease parsing.
+The full SCIP symbol for `references --symbol` or `implementations --symbol` is `<scheme> <packageManager> <packageName> <packageVersion> <descriptor>`.
 
 ---
 
@@ -174,14 +173,14 @@ When a query command succeeds, `scip-search` writes the selected output format t
 By default, `symbols --name` returns one grep-style line per matched symbol:
 
 ```text
-<path>:<line>:<column>:<packageKey> <descriptor> match=<matchSource> text=<matchText>
+<path>:<line>:<column> symbol="<packageKey> <descriptor>"; match=<matchSource>; text=<matchText>
 ```
 
 Default reference and implementation output also use one source-location-prefixed line per result:
 
 ```text
-<path>:<line>:<column>:<referenced-symbol> roles=<roles>
-<path>:<line>:<column>:<implementation-symbol>
+<path>:<line>:<column> symbol="<referenced-symbol>"; roles=<roles>
+<path>:<line>:<column> symbol="<implementation-symbol>"
 ```
 
 `--location-only` selects source locations without metadata for exact-symbol reference and implementation queries:
@@ -192,7 +191,7 @@ Default reference and implementation output also use one source-location-prefixe
 
 `--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload. `references` and `implementations` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value. `--location-only` for `references` and `implementations` requires `--symbol` and cannot be used with `--name`.
 
-In one-line output, `line` and `column` are the SCIP range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols or implementations without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata after the third colon is grep-style human-readable text. `symbols` match text escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line. `packages` one-line output writes one package key per line.
+In one-line output, `line` and `column` are the SCIP range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols or implementations without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata is labeled text after the location prefix. The `symbol=` value is a JSON string because SCIP symbols can contain semicolons; fields after that quoted value are separated by semicolons. `symbols` match text escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line. `packages` one-line output writes one package key per line.
 
 Shared invocation failures, including a missing query command, an unsupported query command, or a missing `--index`, are usage failures. They leave stdout empty, write a human-readable diagnostic to stderr, and exit with status `2`.
 

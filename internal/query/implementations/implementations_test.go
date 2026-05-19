@@ -15,6 +15,7 @@ const (
 	queryInterfaceSymbol     = "scip-go gomod example.com/project . api/Doer#"
 	firstImplementation      = "scip-go gomod example.com/project . impl/AlphaDoer#"
 	secondImplementation     = "scip-go gomod example.com/project . impl/BetaDoer#"
+	delimiterImplementation  = "scip-go gomod example.com/project . `impl/Semi; match=Trap`#"
 	outgoingTargetSymbol     = "scip-go gomod example.com/project . api/Other#"
 	referenceOnlySymbol      = "scip-go gomod example.com/project . impl/ReferenceOnly#"
 	externalImplementation   = "scip-go gomod example.com/dependency v1.2.3 dep/ExternalDoer#"
@@ -142,9 +143,28 @@ func TestOneLineFormatsImplementationLocations(t *testing.T) {
 		},
 	}
 
-	want := "impl/alpha.go:5:6:scip-go gomod example.com/project . impl/AlphaDoer#\n" +
-		"impl/beta.go:0:0:scip-go gomod example.com/project . impl/BetaDoer#\n" +
-		"?:0:0:scip-go gomod example.com/dependency v1.2.3 dep/ExternalDoer#\n"
+	want := "impl/alpha.go:5:6 symbol=\"scip-go gomod example.com/project . impl/AlphaDoer#\"\n" +
+		"impl/beta.go:0:0 symbol=\"scip-go gomod example.com/project . impl/BetaDoer#\"\n" +
+		"?:0:0 symbol=\"scip-go gomod example.com/dependency v1.2.3 dep/ExternalDoer#\"\n"
+	if got := implementations.OneLine(payload); got != want {
+		t.Fatalf("OneLine() = %q, want %q", got, want)
+	}
+}
+
+func TestOneLineQuotesImplementationSymbolDelimiterText(t *testing.T) {
+	t.Parallel()
+
+	payload := implementations.Payload{
+		Implementations: []implementations.Result{
+			{
+				ImplementationSymbol: delimiterImplementation,
+				DocumentPath:         "impl/semi.go",
+				Range:                []int32{6, 7, 12},
+			},
+		},
+	}
+
+	want := "impl/semi.go:7:8 symbol=\"scip-go gomod example.com/project . `impl/Semi; match=Trap`#\"\n"
 	if got := implementations.OneLine(payload); got != want {
 		t.Fatalf("OneLine() = %q, want %q", got, want)
 	}

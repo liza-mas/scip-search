@@ -61,11 +61,11 @@ func OneLine(payload Payload) string {
 		path, line, column := oneline.Location(reference.DocumentPath, reference.Range)
 		fmt.Fprintf(
 			&builder,
-			"%s:%d:%d:%s roles=%d\n",
+			"%s:%d:%d symbol=%s; roles=%d\n",
 			path,
 			line,
 			column,
-			reference.Symbol,
+			oneline.Quote(reference.Symbol),
 			reference.Roles,
 		)
 	}
