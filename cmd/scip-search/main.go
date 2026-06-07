@@ -352,7 +352,7 @@ func (handler graphExportHandler) Handle(loadedIndex any, args []string) (any, e
 	if err != nil {
 		return nil, err
 	}
-	return graphexport.Export(loaded, handler.buildIdentity, filters, time.Now), nil
+	return graphexport.ExportView(loaded, view, handler.buildIdentity, filters, time.Now), nil
 }
 
 func (handler graphHandler) Handle(loadedIndex any, args []string) (any, error) {
@@ -470,19 +470,6 @@ func parseGraphSymbolSetArgs(args []string, command string) (symbolSetArgs, quer
 }
 
 func parseGraphExportArgs(view traversal.View, args []string) (graphexport.Filters, error) {
-	if duplicateFlag(args, "--one-line") {
-		return graphexport.Filters{}, errors.New("--one-line is not supported for graph-export; JSON is always emitted")
-	}
-	if duplicateFlag(args, "--json") {
-		return graphexport.Filters{}, errors.New("--json is not supported for graph-export; JSON is always emitted")
-	}
-	if duplicateFlag(args, "--markdown") {
-		return graphexport.Filters{}, errors.New("--markdown is not supported for graph-export")
-	}
-	if duplicateFlag(args, "--location-only") {
-		return graphexport.Filters{}, errors.New("--location-only is not supported for graph-export")
-	}
-
 	var queryArgs symbolSetArgs
 	var packagePrefixes []string
 	for position := 0; position < len(args); position++ {

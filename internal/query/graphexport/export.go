@@ -76,8 +76,23 @@ type edgeKey struct {
 	provenance string
 }
 
+type documentOccurrences struct {
+	definitions []traversal.Occurrence
+	references  []traversal.Occurrence
+}
+
 func Export(
 	loaded runtimecontract.LoadedIndex,
+	buildIdentity version.BuildIdentity,
+	filters Filters,
+	now func() time.Time,
+) Payload {
+	return ExportView(loaded, traversal.NewView(loaded), buildIdentity, filters, now)
+}
+
+func ExportView(
+	loaded runtimecontract.LoadedIndex,
+	view traversal.View,
 	buildIdentity version.BuildIdentity,
 	filters Filters,
 	now func() time.Time,
@@ -86,7 +101,6 @@ func Export(
 		now = time.Now
 	}
 
-	view := traversal.NewView(loaded)
 	nodesByID := knownNodes(view)
 	edgesByKey := collectEdges(view)
 	addMissingEndpointNodes(nodesByID, edgesByKey)
@@ -177,24 +191,36 @@ func addRelationshipEdges(edges map[edgeKey]int, view traversal.View, source str
 }
 
 func addContainedDependencyEdges(edges map[edgeKey]int, view traversal.View) {
-	for _, definition := range view.Occurrences() {
-		if definition.Symbol == "" || !isDefinition(definition) || !definition.HasEnclosingRange || len(definition.EnclosingRange) == 0 {
+	occurrencesByDocument := map[string]documentOccurrences{}
+	for _, occurrence := range view.Occurrences() {
+		if occurrence.Symbol == "" {
 			continue
 		}
-		for _, occurrence := range view.Occurrences() {
-			if occurrence.Symbol == "" || occurrence.DocumentPath != definition.DocumentPath || isDefinition(occurrence) {
-				continue
+		group := occurrencesByDocument[occurrence.DocumentPath]
+		if isDefinition(occurrence) {
+			if occurrence.HasEnclosingRange && len(occurrence.EnclosingRange) > 0 {
+				group.definitions = append(group.definitions, occurrence)
 			}
-			if !rangeWithin(occurrence.Range, definition.EnclosingRange) {
-				continue
+		} else {
+			group.references = append(group.references, occurrence)
+		}
+		occurrencesByDocument[occurrence.DocumentPath] = group
+	}
+
+	for _, group := range occurrencesByDocument {
+		for _, definition := range group.definitions {
+			for _, occurrence := range group.references {
+				if !rangeWithin(occurrence.Range, definition.EnclosingRange) {
+					continue
+				}
+				key := edgeKey{
+					source:     definition.Symbol,
+					target:     occurrence.Symbol,
+					edgeType:   "dependency",
+					provenance: "contained_dependency",
+				}
+				edges[key]++
 			}
-			key := edgeKey{
-				source:     definition.Symbol,
-				target:     occurrence.Symbol,
-				edgeType:   "dependency",
-				provenance: "contained_dependency",
-			}
-			edges[key]++
 		}
 	}
 }

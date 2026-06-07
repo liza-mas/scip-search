@@ -180,6 +180,17 @@ func graphExportFixture() runtimecontract.LoadedIndex {
 						},
 					},
 				},
+				{
+					RelativePath: "pkg/other.go",
+					Language:     "go",
+					Occurrences: []*scip.Occurrence{
+						{
+							Symbol:      dependencySymbol,
+							Range:       []int32{4, 2, 12},
+							SymbolRoles: int32(scip.SymbolRole_ReadAccess),
+						},
+					},
+				},
 			},
 			ExternalSymbols: []*scip.SymbolInformation{
 				{
