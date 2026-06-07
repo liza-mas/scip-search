@@ -27,6 +27,7 @@ var testDocumentedCommands = []string{
 	"callers",
 	"callees",
 	"impact",
+	"graph-export",
 }
 
 func TestDocumentedCommandsRouteThroughSharedRegistry(t *testing.T) {
@@ -135,6 +136,8 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
+		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...",
+		"graph-export     Export the factual SCIP symbol graph as JSON.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
 		"--markdown     Multi-line Markdown text for graph and impact commands.",
@@ -147,11 +150,12 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 		"graph            <path>:<line>:<column> symbol=\"<symbol>\"; direction=<incoming|outgoing>; roles=<roles>",
 		"impact           <path>:<line>:<column> symbol=\"<symbol>\"; section=<review|dependency|tests>; ...",
 		"location-only    <path>:<line>:<column>",
-		"symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.",
+		"symbols accepts repeated --name; references, implementations, graph, callers, callees, impact, and graph-export accept repeated --name and --symbol.",
 		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
 		"Repeated results are de-duplicated.",
 		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
 		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
+		"graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -665,6 +669,7 @@ func newRecordingHandlers() map[string]Handler {
 		"callers":         &recordingHandler{name: "callers"},
 		"callees":         &recordingHandler{name: "callees"},
 		"impact":          &recordingHandler{name: "impact"},
+		"graph-export":    &recordingHandler{name: "graph-export"},
 	}
 }
 

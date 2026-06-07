@@ -1,6 +1,7 @@
 package scipindex
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -67,9 +68,15 @@ func (loader Loader) LoadIndex(indexPath string) (runtimecontract.LoadedIndex, e
 	}
 
 	return runtimecontract.LoadedIndex{
-		Path:  indexPath,
-		Index: index,
+		Path:        indexPath,
+		Fingerprint: fingerprint(indexBytes),
+		Index:       index,
 	}, nil
+}
+
+func fingerprint(contents []byte) string {
+	sum := sha256.Sum256(contents)
+	return fmt.Sprintf("sha256:%x", sum)
 }
 
 func indexLoadError(indexPath string, operation string, cause error) error {

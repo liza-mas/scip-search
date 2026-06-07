@@ -100,6 +100,8 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
+		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...",
+		"graph-export     Export the factual SCIP symbol graph as JSON.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
 		"--markdown     Multi-line Markdown text for graph and impact commands.",
@@ -112,11 +114,12 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"graph            <path>:<line>:<column> symbol=\"<symbol>\"; direction=<incoming|outgoing>; roles=<roles>",
 		"impact           <path>:<line>:<column> symbol=\"<symbol>\"; section=<review|dependency|tests>; ...",
 		"location-only    <path>:<line>:<column>",
-		"symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.",
+		"symbols accepts repeated --name; references, implementations, graph, callers, callees, impact, and graph-export accept repeated --name and --symbol.",
 		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
 		"Repeated results are de-duplicated.",
 		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
 		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
+		"graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -1073,6 +1076,45 @@ func TestRunProductionImpactCommandAcceptsJSONOutput(t *testing.T) {
 	}
 }
 
+func TestRunProductionGraphExportCommandEmitsJSONArtifact(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"graph-export", "--index", fixture.IndexPath, "--package-prefix", "example.com/fixture"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("graph-export status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	if payload["schema_version"] != "scip.graph-export.v1" {
+		t.Fatalf("schema_version = %#v, want graph export v1", payload["schema_version"])
+	}
+	generator := payload["generator"].(map[string]any)
+	if generator["name"] != "scip-search" {
+		t.Fatalf("generator = %#v, want scip-search", generator)
+	}
+	inputs := payload["inputs"].(map[string]any)
+	scipIndex := inputs["scip_index"].(map[string]any)
+	if scipIndex["path"] != fixture.IndexPath {
+		t.Fatalf("input path = %#v, want selected fixture path %q", scipIndex["path"], fixture.IndexPath)
+	}
+	if fingerprint, ok := scipIndex["fingerprint"].(string); !ok || !strings.HasPrefix(fingerprint, "sha256:") {
+		t.Fatalf("fingerprint = %#v, want sha256 fingerprint", scipIndex["fingerprint"])
+	}
+	nodes := payload["nodes"].([]any)
+	edges := payload["edges"].([]any)
+	if len(nodes) == 0 {
+		t.Fatal("nodes is empty, want exported symbols")
+	}
+	assertExportNodeClosure(t, nodes, edges)
+}
+
 func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
 	t.Parallel()
 
@@ -1333,6 +1375,26 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			name:    "packages wrong query flag",
 			command: "packages",
 			args:    []string{"--name", "Supervisor"},
+		},
+		{
+			name:    "graph-export missing symbol value",
+			command: "graph-export",
+			args:    []string{"--symbol"},
+		},
+		{
+			name:    "graph-export flag-shaped package prefix",
+			command: "graph-export",
+			args:    []string{"--package-prefix", "--name"},
+		},
+		{
+			name:    "graph-export rejects json flag",
+			command: "graph-export",
+			args:    []string{"--json"},
+		},
+		{
+			name:    "graph-export rejects markdown flag",
+			command: "graph-export",
+			args:    []string{"--markdown"},
 		},
 	}
 
@@ -1600,7 +1662,7 @@ func runWithProductionLoader(
 }
 
 func documentedQueryCommands() []string {
-	return []string{"symbols", "references", "implementations", "packages", "graph", "callers", "callees", "impact"}
+	return []string{"symbols", "references", "implementations", "packages", "graph", "callers", "callees", "impact", "graph-export"}
 }
 
 func documentedCommandArgs(command string, indexPath string) []string {
@@ -1617,6 +1679,8 @@ func documentedQueryArgs(command string) []string {
 		return []string{"--symbol", "scip-go gomod example.com/repo . pkg/Foo#"}
 	case "packages":
 		return []string{"--prefix", "example.com"}
+	case "graph-export":
+		return []string{"--package-prefix", "example.com"}
 	default:
 		return nil
 	}
@@ -1822,6 +1886,30 @@ func assertQuerySymbol(t *testing.T, query any, want string) {
 	}
 	if got, ok := object["symbol"].(string); !ok || got != want {
 		t.Fatalf("query = %#v, want symbol %q", query, want)
+	}
+}
+
+func assertExportNodeClosure(t *testing.T, rawNodes []any, rawEdges []any) {
+	t.Helper()
+	nodes := map[string]bool{}
+	for _, rawNode := range rawNodes {
+		node := rawNode.(map[string]any)
+		id, ok := node["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("node = %#v, want non-empty id", node)
+		}
+		nodes[id] = true
+	}
+	for _, rawEdge := range rawEdges {
+		edge := rawEdge.(map[string]any)
+		source := edge["source"].(string)
+		target := edge["target"].(string)
+		if !nodes[source] {
+			t.Fatalf("edge source %q has no matching node", source)
+		}
+		if !nodes[target] {
+			t.Fatalf("edge target %q has no matching node", target)
+		}
 	}
 }
 

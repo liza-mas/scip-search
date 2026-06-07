@@ -1,7 +1,9 @@
 package scipindex
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -123,6 +125,9 @@ func TestLoadIndexParsesValidSCIPBytesWithSelectedPathPreserved(t *testing.T) {
 	if loaded.Path != selectedPath {
 		t.Fatalf("loaded path = %q, want caller-selected path %q", loaded.Path, selectedPath)
 	}
+	if loaded.Fingerprint != fingerprintForTest(indexBytes) {
+		t.Fatalf("fingerprint = %q, want stable hash of selected index bytes", loaded.Fingerprint)
+	}
 	if loaded.Index == nil {
 		t.Fatal("loaded index is nil, want official SCIP index data")
 	}
@@ -136,6 +141,11 @@ func TestLoadIndexParsesValidSCIPBytesWithSelectedPathPreserved(t *testing.T) {
 		t.Fatalf("opened paths = %v, want only caller-selected path %q", opened, selectedPath)
 	}
 	assertFileBytes(t, selectedPath, indexBytes)
+}
+
+func fingerprintForTest(contents []byte) string {
+	sum := sha256.Sum256(contents)
+	return fmt.Sprintf("sha256:%x", sum)
 }
 
 func assertIndexLoadFailure(t *testing.T, err error) {

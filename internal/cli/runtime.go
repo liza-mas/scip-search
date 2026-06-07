@@ -19,6 +19,7 @@ var documentedCommands = []string{
 	"callers",
 	"callees",
 	"impact",
+	"graph-export",
 }
 
 const helpText = `Description:
@@ -35,6 +36,7 @@ Usage:
   scip-search callers --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+  scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...
 
 Commands:
   symbols          Find symbols by literal partial name.
@@ -45,6 +47,7 @@ Commands:
   callers          Show static incoming dependents for symbols.
   callees          Show static outgoing dependencies for symbols.
   impact           Show static review, dependency, and test hints for symbols.
+  graph-export     Export the factual SCIP symbol graph as JSON.
 
 Output:
   --one-line     Grep-style text output; default for all query commands.
@@ -63,11 +66,12 @@ One-line formats:
   packages         <packageKey>
 
 Notes:
-  symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.
+  symbols accepts repeated --name; references, implementations, graph, callers, callees, impact, and graph-export accept repeated --name and --symbol.
   --location-only for references and implementations requires --symbol and cannot be used with --name.
   Repeated results are de-duplicated.
   references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.
   graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.
+  graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.
   Reads an existing SCIP index; does not generate, update, or discover indexes.
 
 Exit codes:
