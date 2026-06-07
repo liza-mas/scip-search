@@ -4,6 +4,7 @@
     "internal/cli": "Runtime command routing, argument validation, index loading, status codes, and build identity",
     "internal/query/discovery": "Symbol and package discovery queries, including name matching and JSON/one-line payloads",
     "internal/query/graph": "Static SCIP graph and impact queries for definitions, incoming references, outgoing dependencies, relationships, test hints, and compact agent-oriented output",
+    "internal/query/graphexport": "Graphexport",
     "internal/query/implementations": "Implementation lookup from SCIP relationship edges with structured, one-line, and location-only output",
     "internal/query/oneline": "Shared source-location formatting helpers for grep-style query output",
     "internal/query/references": "Reference lookup for exact SCIP symbols with structured, one-line, and location-only output",
