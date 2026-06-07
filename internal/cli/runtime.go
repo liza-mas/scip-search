@@ -15,10 +15,14 @@ var documentedCommands = []string{
 	"references",
 	"implementations",
 	"packages",
+	"graph",
+	"callers",
+	"callees",
+	"impact",
 }
 
 const helpText = `Description:
-  Search a pre-built SCIP index for symbols, references, implementations, and packages.
+  Search a pre-built SCIP index for symbols, references, implementations, packages, and static graph hints.
 
 Usage:
   scip-search --help
@@ -27,16 +31,25 @@ Usage:
   scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
   scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
   scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
+  scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+  scip-search callers --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+  scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+  scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
 
 Commands:
   symbols          Find symbols by literal partial name.
   references       Find references to exact SCIP symbols or symbols found by name.
   implementations  Find implementations of exact SCIP symbols or symbols found by name.
   packages         List package identities in an index.
+  graph            Show static incoming, outgoing, and relationship edges for symbols.
+  callers          Show static incoming dependents for symbols.
+  callees          Show static outgoing dependencies for symbols.
+  impact           Show static review, dependency, and test hints for symbols.
 
 Output:
   --one-line     Grep-style text output; default for all query commands.
   --json         Structured JSON output.
+  --markdown     Multi-line Markdown text for graph and impact commands.
   --nested-json  Compact package-grouped JSON output for symbols only.
   --location-only  Location-only text output for exact-symbol references and implementations.
 
@@ -44,14 +57,17 @@ One-line formats:
   symbols          <path>:<line>:<column> symbol="<packageKey> <descriptor>"; match=<source>; text=<text>
   references       <path>:<line>:<column> symbol="<referenced-symbol>"; roles=<roles>
   implementations  <path>:<line>:<column> symbol="<implementation-symbol>"
+  graph            <path>:<line>:<column> symbol="<symbol>"; direction=<incoming|outgoing>; roles=<roles>
+  impact           <path>:<line>:<column> symbol="<symbol>"; section=<review|dependency|tests>; ...
   location-only    <path>:<line>:<column>
   packages         <packageKey>
 
 Notes:
-  symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.
+  symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.
   --location-only for references and implementations requires --symbol and cannot be used with --name.
   Repeated results are de-duplicated.
-  references and implementations require --symbol, --name, or both.
+  references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.
+  graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.
   Reads an existing SCIP index; does not generate, update, or discover indexes.
 
 Exit codes:
@@ -63,6 +79,8 @@ Exit codes:
 Examples:
   scip-search symbols --index go.scip --name Handler
   scip-search references --index go.scip --name Handler --one-line
+  scip-search graph --index go.scip --name Handler
+  scip-search impact --index go.scip --name Handler --markdown
 `
 
 // Loader is the boundary that later runtime stages use after command selection.

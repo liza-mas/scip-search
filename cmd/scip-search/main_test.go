@@ -92,25 +92,31 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Description:",
-		"Search a pre-built SCIP index for symbols, references, implementations, and packages.",
+		"Search a pre-built SCIP index for symbols, references, implementations, packages, and static graph hints.",
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]",
 		"scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
 		"scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
+		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
+		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
+		"--markdown     Multi-line Markdown text for graph and impact commands.",
 		"--location-only  Location-only text output for exact-symbol references and implementations.",
 		"--nested-json  Compact package-grouped JSON output for symbols only.",
 		"One-line formats:",
 		"symbols          <path>:<line>:<column> symbol=\"<packageKey> <descriptor>\"; match=<source>; text=<text>",
 		"references       <path>:<line>:<column> symbol=\"<referenced-symbol>\"; roles=<roles>",
 		"implementations  <path>:<line>:<column> symbol=\"<implementation-symbol>\"",
+		"graph            <path>:<line>:<column> symbol=\"<symbol>\"; direction=<incoming|outgoing>; roles=<roles>",
+		"impact           <path>:<line>:<column> symbol=\"<symbol>\"; section=<review|dependency|tests>; ...",
 		"location-only    <path>:<line>:<column>",
-		"symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.",
+		"symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.",
 		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
 		"Repeated results are de-duplicated.",
-		"references and implementations require --symbol, --name, or both.",
+		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
+		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -987,6 +993,86 @@ func TestRunProductionReferencesCommandAcceptsMultipleExactSymbolsInJSON(t *test
 	assertQuerySymbol(t, queries[1], traversaltest.BetaSymbol)
 }
 
+func TestRunProductionGraphCommandDefaultsToOneLineOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"graph", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("graph status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	for _, want := range []string{
+		"cmd/alpha.go:3:7 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"; kind=definition",
+		"direction=incoming",
+		"relationship=",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("graph stdout = %q, want substring %q", stdout.String(), want)
+		}
+	}
+	if strings.Contains(stdout.String(), "[SCIP Static Graph]") {
+		t.Fatalf("graph stdout = %q, want one-line default output", stdout.String())
+	}
+}
+
+func TestRunProductionGraphCommandAcceptsMarkdownOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"graph", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--markdown"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("graph --markdown status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	for _, want := range []string{"[SCIP Static Graph]", "Incoming:", "Outgoing:", "Relationships:"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("graph --markdown stdout = %q, want substring %q", stdout.String(), want)
+		}
+	}
+}
+
+func TestRunProductionImpactCommandAcceptsJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"impact", "--index", fixture.IndexPath, "--name", "Alpha", "--json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("impact --json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertStringArrayField(t, payload, "symbols", []string{traversaltest.AlphaSymbol})
+	queries := payload["queries"].([]any)
+	if len(queries) != 1 {
+		t.Fatalf("queries = %#v, want one impact query", queries)
+	}
+	query := queries[0].(map[string]any)
+	for _, field := range []string{"review", "dependencies", "relationships", "tests"} {
+		if _, ok := query[field].([]any); !ok {
+			t.Fatalf("impact query field %s = %#v, want array", field, query[field])
+		}
+	}
+}
+
 func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
 	t.Parallel()
 
@@ -1514,7 +1600,7 @@ func runWithProductionLoader(
 }
 
 func documentedQueryCommands() []string {
-	return []string{"symbols", "references", "implementations", "packages"}
+	return []string{"symbols", "references", "implementations", "packages", "graph", "callers", "callees", "impact"}
 }
 
 func documentedCommandArgs(command string, indexPath string) []string {
@@ -1527,7 +1613,7 @@ func documentedQueryArgs(command string) []string {
 	switch command {
 	case "symbols":
 		return []string{"--name", "Supervisor"}
-	case "references", "implementations":
+	case "references", "implementations", "graph", "callers", "callees", "impact":
 		return []string{"--symbol", "scip-go gomod example.com/repo . pkg/Foo#"}
 	case "packages":
 		return []string{"--prefix", "example.com"}

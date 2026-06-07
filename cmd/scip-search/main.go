@@ -10,6 +10,7 @@ import (
 
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
+	graphquery "scip-search/internal/query/graph"
 	"scip-search/internal/query/implementations"
 	"scip-search/internal/query/oneline"
 	"scip-search/internal/query/references"
@@ -37,6 +38,10 @@ func runWithBuildIdentity(
 		"references":      referencesHandler{},
 		"implementations": implementationsHandler{},
 		"packages":        packagesHandler{},
+		"graph":           graphHandler{kind: graphCommandGraph},
+		"callers":         graphHandler{kind: graphCommandCallers},
+		"callees":         graphHandler{kind: graphCommandCallees},
+		"impact":          graphHandler{kind: graphCommandImpact},
 	}, buildIdentity)
 
 	return cliRuntime.Run(args, stdout, stderr)
@@ -139,6 +144,7 @@ const (
 	outputOneLine queryOutputMode = iota
 	outputJSON
 	outputLocationOnly
+	outputMarkdown
 )
 
 type packagesHandler struct{}
@@ -298,12 +304,265 @@ type implementationQueriesPayload struct {
 	Queries []implementations.Payload `json:"queries"`
 }
 
+type graphQueriesPayload struct {
+	Symbols []string             `json:"symbols"`
+	Queries []graphquery.Payload `json:"queries"`
+}
+
+type impactQueriesPayload struct {
+	Symbols []string                   `json:"symbols"`
+	Queries []graphquery.ImpactPayload `json:"queries"`
+}
+
 type referenceOutputKey struct {
 	symbol       string
 	documentPath string
 	roles        int32
 	rangeLength  int
 	scipRange    [4]int32
+}
+
+type graphCommandKind int
+
+const (
+	graphCommandGraph graphCommandKind = iota
+	graphCommandCallers
+	graphCommandCallees
+	graphCommandImpact
+)
+
+type graphHandler struct {
+	kind graphCommandKind
+}
+
+func (handler graphHandler) Handle(loadedIndex any, args []string) (any, error) {
+	loaded, ok := loadedIndex.(runtimecontract.LoadedIndex)
+	if !ok {
+		return nil, errors.New(handler.commandName() + " handler received non-SCIP loaded index")
+	}
+	view := traversal.NewView(loaded)
+	symbols, usesName, outputMode, err := parseAndResolveGraphSymbolSet(view, args, handler.commandName())
+	if err != nil {
+		return nil, err
+	}
+
+	if handler.kind == graphCommandImpact {
+		if !usesName && len(symbols) == 1 {
+			payload := graphquery.Impact(view, symbols[0])
+			return graphImpactOutput(payload, outputMode)
+		}
+		payload := impactQueries(view, symbols)
+		return graphImpactQueriesOutput(payload, outputMode)
+	}
+
+	if !usesName && len(symbols) == 1 {
+		payload := graphPayloadForKind(view, symbols[0], handler.kind)
+		return graphOutput(payload, outputMode)
+	}
+	payload := graphQueries(view, symbols, handler.kind)
+	return graphQueriesOutput(payload, outputMode)
+}
+
+func (handler graphHandler) commandName() string {
+	switch handler.kind {
+	case graphCommandCallers:
+		return "callers"
+	case graphCommandCallees:
+		return "callees"
+	case graphCommandImpact:
+		return "impact"
+	default:
+		return "graph"
+	}
+}
+
+func parseAndResolveGraphSymbolSet(
+	view traversal.View,
+	args []string,
+	command string,
+) ([]string, bool, queryOutputMode, error) {
+	queryArgs, outputMode, err := parseGraphSymbolSetArgs(args, command)
+	if err != nil {
+		return nil, false, outputOneLine, err
+	}
+	symbols, err := resolveSymbolSet(view, queryArgs)
+	if err != nil {
+		return nil, false, outputOneLine, err
+	}
+	return symbols, len(queryArgs.names) > 0, outputMode, nil
+}
+
+func parseGraphSymbolSetArgs(args []string, command string) (symbolSetArgs, queryOutputMode, error) {
+	if duplicateFlag(args, "--one-line") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--one-line can only be provided once")
+	}
+	if duplicateFlag(args, "--json") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--json can only be provided once")
+	}
+	if duplicateFlag(args, "--markdown") {
+		return symbolSetArgs{}, outputOneLine, errors.New("--markdown can only be provided once")
+	}
+
+	var queryArgs symbolSetArgs
+	outputMode := outputOneLine
+	hasOutputMode := false
+	for position := 0; position < len(args); position++ {
+		arg := args[position]
+		switch arg {
+		case "--symbol":
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return symbolSetArgs{}, outputOneLine, errors.New("--symbol requires a value")
+			}
+			queryArgs.symbols = append(queryArgs.symbols, args[position+1])
+			position++
+		case "--name":
+			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
+				return symbolSetArgs{}, outputOneLine, errors.New("--name requires a value")
+			}
+			queryArgs.names = append(queryArgs.names, args[position+1])
+			position++
+		case "--one-line":
+			if hasOutputMode {
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputOneLine
+			hasOutputMode = true
+		case "--json":
+			if hasOutputMode {
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputJSON
+			hasOutputMode = true
+		case "--markdown":
+			if hasOutputMode {
+				return symbolSetArgs{}, outputOneLine, errors.New(command + " output flags are mutually exclusive")
+			}
+			outputMode = outputMarkdown
+			hasOutputMode = true
+		default:
+			return symbolSetArgs{}, outputOneLine, errors.New(command + " only accepts --symbol, --name, --one-line, --json, and --markdown")
+		}
+	}
+	if len(queryArgs.symbols) == 0 && len(queryArgs.names) == 0 {
+		return symbolSetArgs{}, outputOneLine, errors.New("missing --symbol or --name")
+	}
+	return queryArgs, outputMode, nil
+}
+
+func graphPayloadForKind(view traversal.View, symbol string, kind graphCommandKind) graphquery.Payload {
+	payload := graphquery.Query(view, symbol)
+	switch kind {
+	case graphCommandCallers:
+		return graphquery.Callers(payload)
+	case graphCommandCallees:
+		return graphquery.Callees(payload)
+	default:
+		return payload
+	}
+}
+
+func graphQueries(view traversal.View, symbols []string, kind graphCommandKind) graphQueriesPayload {
+	queries := make([]graphquery.Payload, 0, len(symbols))
+	for _, symbol := range symbols {
+		queries = append(queries, graphPayloadForKind(view, symbol, kind))
+	}
+	return graphQueriesPayload{Symbols: symbols, Queries: queries}
+}
+
+func impactQueries(view traversal.View, symbols []string) impactQueriesPayload {
+	queries := make([]graphquery.ImpactPayload, 0, len(symbols))
+	for _, symbol := range symbols {
+		queries = append(queries, graphquery.Impact(view, symbol))
+	}
+	return impactQueriesPayload{Symbols: symbols, Queries: queries}
+}
+
+func graphOutput(payload graphquery.Payload, outputMode queryOutputMode) (any, error) {
+	switch outputMode {
+	case outputJSON:
+		return payload, nil
+	case outputMarkdown:
+		return runtimecontract.RawOutput{Text: graphquery.Markdown(payload)}, nil
+	default:
+		return runtimecontract.RawOutput{Text: graphquery.OneLine(payload)}, nil
+	}
+}
+
+func graphQueriesOutput(payload graphQueriesPayload, outputMode queryOutputMode) (any, error) {
+	switch outputMode {
+	case outputJSON:
+		return payload, nil
+	case outputMarkdown:
+		var builder strings.Builder
+		for index, query := range payload.Queries {
+			if index > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(graphquery.Markdown(query))
+		}
+		return runtimecontract.RawOutput{Text: builder.String()}, nil
+	default:
+		var builder strings.Builder
+		seen := map[string]struct{}{}
+		for _, query := range payload.Queries {
+			for _, line := range strings.Split(graphquery.OneLine(query), "\n") {
+				if line == "" {
+					continue
+				}
+				if _, exists := seen[line]; exists {
+					continue
+				}
+				seen[line] = struct{}{}
+				builder.WriteString(line)
+				builder.WriteString("\n")
+			}
+		}
+		return runtimecontract.RawOutput{Text: builder.String()}, nil
+	}
+}
+
+func graphImpactOutput(payload graphquery.ImpactPayload, outputMode queryOutputMode) (any, error) {
+	switch outputMode {
+	case outputJSON:
+		return payload, nil
+	case outputMarkdown:
+		return runtimecontract.RawOutput{Text: graphquery.ImpactMarkdown(payload)}, nil
+	default:
+		return runtimecontract.RawOutput{Text: graphquery.ImpactOneLine(payload)}, nil
+	}
+}
+
+func graphImpactQueriesOutput(payload impactQueriesPayload, outputMode queryOutputMode) (any, error) {
+	switch outputMode {
+	case outputJSON:
+		return payload, nil
+	case outputMarkdown:
+		var builder strings.Builder
+		for index, query := range payload.Queries {
+			if index > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(graphquery.ImpactMarkdown(query))
+		}
+		return runtimecontract.RawOutput{Text: builder.String()}, nil
+	default:
+		var builder strings.Builder
+		seen := map[string]struct{}{}
+		for _, query := range payload.Queries {
+			for _, line := range strings.Split(graphquery.ImpactOneLine(query), "\n") {
+				if line == "" {
+					continue
+				}
+				if _, exists := seen[line]; exists {
+					continue
+				}
+				seen[line] = struct{}{}
+				builder.WriteString(line)
+				builder.WriteString("\n")
+			}
+		}
+		return runtimecontract.RawOutput{Text: builder.String()}, nil
+	}
 }
 
 func parseAndResolveSymbolSet(

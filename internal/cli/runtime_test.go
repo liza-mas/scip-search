@@ -18,18 +18,24 @@ import (
 	"scip-search/internal/version"
 )
 
+var testDocumentedCommands = []string{
+	"symbols",
+	"references",
+	"implementations",
+	"packages",
+	"graph",
+	"callers",
+	"callees",
+	"impact",
+}
+
 func TestDocumentedCommandsRouteThroughSharedRegistry(t *testing.T) {
 	t.Parallel()
 
-	handlers := map[string]Handler{
-		"symbols":         &recordingHandler{name: "symbols"},
-		"references":      &recordingHandler{name: "references"},
-		"implementations": &recordingHandler{name: "implementations"},
-		"packages":        &recordingHandler{name: "packages"},
-	}
+	handlers := newRecordingHandlers()
 	cliRuntime := NewRuntime(&recordingLoader{}, handlers)
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		t.Run(command, func(t *testing.T) {
 			t.Parallel()
 
@@ -121,25 +127,31 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Description:",
-		"Search a pre-built SCIP index for symbols, references, implementations, and packages.",
+		"Search a pre-built SCIP index for symbols, references, implementations, packages, and static graph hints.",
 		"Usage:",
 		"scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one-line|--nested-json|--json]",
 		"scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
 		"scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]",
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
+		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
+		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
+		"--markdown     Multi-line Markdown text for graph and impact commands.",
 		"--location-only  Location-only text output for exact-symbol references and implementations.",
 		"--nested-json  Compact package-grouped JSON output for symbols only.",
 		"One-line formats:",
 		"symbols          <path>:<line>:<column> symbol=\"<packageKey> <descriptor>\"; match=<source>; text=<text>",
 		"references       <path>:<line>:<column> symbol=\"<referenced-symbol>\"; roles=<roles>",
 		"implementations  <path>:<line>:<column> symbol=\"<implementation-symbol>\"",
+		"graph            <path>:<line>:<column> symbol=\"<symbol>\"; direction=<incoming|outgoing>; roles=<roles>",
+		"impact           <path>:<line>:<column> symbol=\"<symbol>\"; section=<review|dependency|tests>; ...",
 		"location-only    <path>:<line>:<column>",
-		"symbols accepts repeated --name; references and implementations accept repeated --name and --symbol.",
+		"symbols accepts repeated --name; references, implementations, graph, callers, callees, and impact accept repeated --name and --symbol.",
 		"--location-only for references and implementations requires --symbol and cannot be used with --name.",
 		"Repeated results are de-duplicated.",
-		"references and implementations require --symbol, --name, or both.",
+		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
+		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -246,7 +258,7 @@ func TestRunVersionDistinguishesReleaseFromSourceBuilds(t *testing.T) {
 func TestRunRequiresIndexForEveryDocumentedCommand(t *testing.T) {
 	t.Parallel()
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		t.Run(command, func(t *testing.T) {
 			t.Parallel()
 
@@ -266,7 +278,7 @@ func TestRunRequiresIndexForEveryDocumentedCommand(t *testing.T) {
 func TestRunRejectsIndexWithoutValueForEveryDocumentedCommand(t *testing.T) {
 	t.Parallel()
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		t.Run(command, func(t *testing.T) {
 			t.Parallel()
 
@@ -358,7 +370,7 @@ func TestRunLoaderFailuresReturnStatusIndexLoadBeforeHandlers(t *testing.T) {
 		},
 	}
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		for _, failure := range failures {
 			t.Run(command+"/"+failure.name, func(t *testing.T) {
 				t.Parallel()
@@ -443,7 +455,7 @@ func TestProductionRuntimeReportsRealLoaderFailuresBeforeHandlers(t *testing.T) 
 		},
 	}
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		for _, failure := range failures {
 			t.Run(command+"/"+failure.name, func(t *testing.T) {
 				t.Parallel()
@@ -466,7 +478,7 @@ func TestProductionRuntimeReportsRealLoaderFailuresBeforeHandlers(t *testing.T) 
 func TestProductionRuntimeLoadsSelectedSCIPBeforeSelectedHandler(t *testing.T) {
 	t.Parallel()
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		t.Run(command, func(t *testing.T) {
 			t.Parallel()
 
@@ -516,7 +528,7 @@ func TestProductionRuntimeLoadsSelectedSCIPBeforeSelectedHandler(t *testing.T) {
 func TestRunWithIndexLoadsAndExecutesOnlySelectedHandler(t *testing.T) {
 	t.Parallel()
 
-	for _, command := range []string{"symbols", "references", "implementations", "packages"} {
+	for _, command := range testDocumentedCommands {
 		t.Run(command, func(t *testing.T) {
 			t.Parallel()
 
@@ -649,6 +661,10 @@ func newRecordingHandlers() map[string]Handler {
 		"references":      &recordingHandler{name: "references"},
 		"implementations": &recordingHandler{name: "implementations"},
 		"packages":        &recordingHandler{name: "packages"},
+		"graph":           &recordingHandler{name: "graph"},
+		"callers":         &recordingHandler{name: "callers"},
+		"callees":         &recordingHandler{name: "callees"},
+		"impact":          &recordingHandler{name: "impact"},
 	}
 }
 

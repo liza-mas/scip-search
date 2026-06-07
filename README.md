@@ -145,6 +145,10 @@ scip-search symbols --index <index-path> --name <name> [--name <name>]... [--one
 scip-search references --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
 scip-search implementations --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--location-only]
 scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]
+scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+scip-search callers --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
+scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
 ```
 
 Examples:
@@ -158,17 +162,21 @@ scip-search references --index /path/to/go.scip --symbol 'scip-go gomod scip-sea
 scip-search implementations --index /path/to/go.scip --symbol 'scip-go gomod scip-search 8ae7b309d177 `scip-search/internal/cli`/Handler#'
 scip-search implementations --index /path/to/go.scip --name Handler
 scip-search packages --index /path/to/go.scip
+scip-search graph --index /path/to/go.scip --name Handler
+scip-search callers --index /path/to/go.scip --name Handler
+scip-search callees --index /path/to/go.scip --name Handler
+scip-search impact --index /path/to/go.scip --name Handler --markdown
 ```
 
 ### Runtime Contract
 
 All query commands require `--index <index-path>`.
 
-`symbols` accepts one or more `--name <name>` values. `references` and `implementations` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both. `--name` and `--symbol` can be repeated; repeated resolved symbols are de-duplicated. When multiple `symbols --name` values match the same symbol, the result appears once and its `matchText` / `matchSource` come from the first matching `--name` value in CLI order.
+`symbols` accepts one or more `--name <name>` values. `references`, `implementations`, `graph`, `callers`, `callees`, and `impact` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both. `--name` and `--symbol` can be repeated; repeated resolved symbols are de-duplicated. When multiple `symbols --name` values match the same symbol, the result appears once and its `matchText` / `matchSource` come from the first matching `--name` value in CLI order.
 
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
-When a query command succeeds, `scip-search` writes the selected output format to stdout, writes nothing to stderr, and exits with status `0`. By default, query commands write one-line text output. `symbols --nested-json`, `symbols --json`, `references --json`, `implementations --json`, and `packages --json` write exactly one JSON value to stdout.
+When a query command succeeds, `scip-search` writes the selected output format to stdout, writes nothing to stderr, and exits with status `0`. By default, query commands write one-line text output. `symbols --nested-json`, `symbols --json`, `references --json`, `implementations --json`, `packages --json`, `graph --json`, `callers --json`, `callees --json`, and `impact --json` write exactly one JSON value to stdout. `graph --markdown`, `callers --markdown`, `callees --markdown`, and `impact --markdown` write compact multi-line Markdown text for agent reading.
 
 By default, `symbols --name` returns one grep-style line per matched symbol:
 
@@ -183,13 +191,24 @@ Default reference and implementation output also use one source-location-prefixe
 <path>:<line>:<column> symbol="<implementation-symbol>"
 ```
 
+Default graph and impact output stays one physical line per fact:
+
+```text
+<path>:<line>:<column> symbol="<symbol>"; direction=<incoming|outgoing>; roles=<roles>
+<path>:<line>:<column> symbol="<symbol>"; section=<review|dependency|tests>; ...
+?:0:0 symbol="<symbol>"; relationship="<relationship-kinds>"; direction=<incoming|outgoing>
+?:0:0 symbol="<symbol>"; direction=outgoing; unavailable="<reason>"
+```
+
 `--location-only` selects source locations without metadata for exact-symbol reference and implementation queries:
 
 ```text
 <path>:<line>:<column>
 ```
 
-`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, and `packages`, `--json` selects the structured JSON payload. `references` and `implementations` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value. `--location-only` for `references` and `implementations` requires `--symbol` and cannot be used with `--name`.
+`--one-line` explicitly selects the default one-line output. For `symbols`, `--nested-json` returns the compact package-grouped payload, while `--json` returns one self-contained JSON entry per symbol with `scheme`, `packageManager`, `packageName`, and `packageVersion` repeated on every symbol result. For `references`, `implementations`, `packages`, `graph`, `callers`, `callees`, and `impact`, `--json` selects the structured JSON payload. `references`, `implementations`, `graph`, `callers`, `callees`, and `impact` accept `--symbol`, `--name`, or both. `--name` is resolved through the same literal symbol-name discovery used by `symbols --name`; when `--name` is present, JSON output contains `symbols` and per-symbol `queries` so multiple resolved symbols can be represented in one JSON value. `--location-only` for `references` and `implementations` requires `--symbol` and cannot be used with `--name`.
+
+`graph`, `callers`, `callees`, and `impact` are static SCIP-derived views. They are useful for code-review boundaries, but they are not complete runtime call graphs. Outgoing dependencies are collected from non-definition occurrences inside the target definition occurrence's SCIP enclosing range. If the definition or enclosing range is absent, the output reports an explicit unavailable reason instead of guessing. `impact` test hints come from SCIP `SymbolRole_Test` occurrences and fixed test-like path patterns in indexed occurrences; no source files or Git diffs are read.
 
 In one-line output, `line` and `column` are the SCIP range start offsets plus 1, not source-file-normalized editor columns. `scip-search` does not read source files to render one-line output. Symbols or implementations without a definition location render as `?:0:0`, which is common for external symbols. Only the `path:line:column` prefix is stable colon-delimited location data; metadata is labeled text after the location prefix. The `symbol=` value is a JSON string because SCIP symbols can contain semicolons; fields after that quoted value are separated by semicolons. `symbols` match text escapes `\`, newline, carriage return, and tab as `\\`, `\n`, `\r`, and `\t` so each result stays on one physical line. `packages` one-line output writes one package key per line.
 
@@ -214,6 +233,8 @@ Uses the official SCIP bindings for Go (e.g. `github.com/scip-code/scip/bindings
 - No UI, no graph visualization
 - No MCP server
 - No custom index format — SCIP is the format
+- No complete runtime call graph; graph and impact commands are static SCIP-derived hints
+- No `impact --diff`; query commands remain index-only
 
 Planned: For ctags fallback languages, `scip-search` reads a thin JSON wrapper (same query interface, reduced capability — definitions only).
 
