@@ -136,7 +136,7 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
-		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...",
+		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]",
 		"graph-export     Export the factual SCIP symbol graph as JSON.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
@@ -155,7 +155,7 @@ func TestRunHelpBypassesQueryValidationLoaderAndHandlers(t *testing.T) {
 		"Repeated results are de-duplicated.",
 		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
 		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
-		"graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.",
+		"graph-export emits JSON only, accepts optional symbol, name, and package-prefix filters, and can write to a file with -o.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -596,6 +596,41 @@ func TestRunWritesRawOutputWithoutJSONEncoding(t *testing.T) {
 	}
 	if stdout.String() != "path.go:1:1:symbol\n" {
 		t.Fatalf("stdout = %q, want raw output without JSON encoding", stdout.String())
+	}
+}
+
+func TestRunWritesJSONFileOutputWithoutStdout(t *testing.T) {
+	t.Parallel()
+
+	outputPath := filepath.Join(t.TempDir(), "graph.json")
+	loader := &recordingLoader{loaded: &loadedContext{id: "graph-export"}}
+	handlers := newRecordingHandlers()
+	selected := handlers["graph-export"].(*recordingHandler)
+	selected.result = runtimecontract.JSONFileOutput{
+		Path:  outputPath,
+		Value: map[string]string{"schema_version": "scip.graph-export.v1"},
+	}
+	cliRuntime := NewRuntime(loader, handlers)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := cliRuntime.Run([]string{"graph-export", "--index", "/tmp/repo.scip", "-o", outputPath}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("Run() status = %d, want %d", status, runtimecontract.StatusOK)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty when writing JSON file output", stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", outputPath, err)
+	}
+	if string(content) != "{\"schema_version\":\"scip.graph-export.v1\"}\n" {
+		t.Fatalf("file content = %q, want compact JSON with trailing newline", string(content))
 	}
 }
 

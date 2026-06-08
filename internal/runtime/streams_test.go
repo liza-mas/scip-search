@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -138,5 +140,43 @@ func TestWriteJSONSuccessAcceptsAnonymousStructResults(t *testing.T) {
 	}
 	if stdout.String() != "{\"count\":2,\"label\":\"sample\"}\n" {
 		t.Fatalf("stdout = %q, want anonymous struct JSON plus newline", stdout.String())
+	}
+}
+
+func TestWriteJSONFileSuccessEmitsOneParseableValueAndNewline(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "graph.json")
+	result := map[string]any{
+		"items": []any{
+			map[string]any{"name": "first"},
+		},
+		"ok": true,
+	}
+
+	status, err := WriteJSONFileSuccess(path, result)
+	if err != nil {
+		t.Fatalf("WriteJSONFileSuccess() error = %v", err)
+	}
+
+	if status != StatusOK {
+		t.Fatalf("WriteJSONFileSuccess() status = %d, want %d", status, StatusOK)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+	if string(content) != "{\"items\":[{\"name\":\"first\"}],\"ok\":true}\n" {
+		t.Fatalf("file content = %q, want exactly one compact JSON value plus newline", string(content))
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	var decoded map[string]any
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("json.Decode(file content) error = %v", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		t.Fatalf("file content contains more than one JSON value: decode err = %v", err)
 	}
 }

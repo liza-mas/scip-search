@@ -149,7 +149,7 @@ scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name
 scip-search callers --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
 scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
 scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
-scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...
+scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]
 ```
 
 Examples:
@@ -167,18 +167,18 @@ scip-search graph --index /path/to/go.scip --name Handler
 scip-search callers --index /path/to/go.scip --name Handler
 scip-search callees --index /path/to/go.scip --name Handler
 scip-search impact --index /path/to/go.scip --name Handler --markdown
-scip-search graph-export --index /path/to/go.scip --package-prefix scip-search
+scip-search graph-export --index /path/to/go.scip --package-prefix scip-search -o graph.json
 ```
 
 ### Runtime Contract
 
 All query commands require `--index <index-path>`.
 
-`symbols` accepts one or more `--name <name>` values. `references`, `implementations`, `graph`, `callers`, `callees`, and `impact` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both. `graph-export` accepts optional `--symbol`, `--name`, and `--package-prefix` filters; with no filters it exports every factual graph node and edge it can derive from the selected SCIP index. `--name` and `--symbol` can be repeated; repeated resolved symbols are de-duplicated. When multiple `symbols --name` values match the same symbol, the result appears once and its `matchText` / `matchSource` come from the first matching `--name` value in CLI order.
+`symbols` accepts one or more `--name <name>` values. `references`, `implementations`, `graph`, `callers`, `callees`, and `impact` require at least one symbol source: `--symbol <scip-symbol>`, `--name <name>`, or both. `graph-export` accepts optional `--symbol`, `--name`, and `--package-prefix` filters plus optional `-o <path>` file output; with no filters it exports every factual graph node and edge it can derive from the selected SCIP index. `--name` and `--symbol` can be repeated; repeated resolved symbols are de-duplicated. When multiple `symbols --name` values match the same symbol, the result appears once and its `matchText` / `matchSource` come from the first matching `--name` value in CLI order.
 
 `scip-search --help` and `scip-search --version` are global commands. They do not require `--index`, write human-readable text to stdout, and exit with status `0`.
 
-When a query command succeeds, `scip-search` writes the selected output format to stdout, writes nothing to stderr, and exits with status `0`. By default, query commands write one-line text output. `symbols --nested-json`, `symbols --json`, `references --json`, `implementations --json`, `packages --json`, `graph --json`, `callers --json`, `callees --json`, and `impact --json` write exactly one JSON value to stdout. `graph-export` always writes exactly one JSON value to stdout; it does not have text or Markdown output modes. `graph --markdown`, `callers --markdown`, `callees --markdown`, and `impact --markdown` write compact multi-line Markdown text for agent reading.
+When a query command succeeds, `scip-search` writes the selected output format to stdout, writes nothing to stderr, and exits with status `0`. By default, query commands write one-line text output. `symbols --nested-json`, `symbols --json`, `references --json`, `implementations --json`, `packages --json`, `graph --json`, `callers --json`, `callees --json`, and `impact --json` write exactly one JSON value to stdout. `graph-export` writes exactly one JSON value to stdout unless `-o <path>` is provided; with `-o`, it writes that JSON value to the selected file and leaves stdout empty. It does not have text or Markdown output modes. `graph --markdown`, `callers --markdown`, `callees --markdown`, and `impact --markdown` write compact multi-line Markdown text for agent reading.
 
 By default, `symbols --name` returns one grep-style line per matched symbol:
 

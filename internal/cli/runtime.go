@@ -36,7 +36,7 @@ Usage:
   scip-search callers --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
-  scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...
+  scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]
 
 Commands:
   symbols          Find symbols by literal partial name.
@@ -71,7 +71,7 @@ Notes:
   Repeated results are de-duplicated.
   references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.
   graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.
-  graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.
+  graph-export emits JSON only, accepts optional symbol, name, and package-prefix filters, and can write to a file with -o.
   Reads an existing SCIP index; does not generate, update, or discover indexes.
 
 Exit codes:
@@ -215,6 +215,9 @@ func (rt Runtime) Run(args []string, stdout io.Writer, stderr io.Writer) runtime
 func writeSuccess(stdout io.Writer, result any) (runtimecontract.Status, error) {
 	if raw, ok := result.(runtimecontract.RawOutput); ok {
 		return runtimecontract.WriteRawSuccess(stdout, raw.Text)
+	}
+	if file, ok := result.(runtimecontract.JSONFileOutput); ok {
+		return runtimecontract.WriteJSONFileSuccess(file.Path, file.Value)
 	}
 
 	return runtimecontract.WriteJSONSuccess(stdout, result)

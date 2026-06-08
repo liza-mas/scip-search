@@ -348,11 +348,15 @@ func (handler graphExportHandler) Handle(loadedIndex any, args []string) (any, e
 		return nil, errors.New("graph-export handler received non-SCIP loaded index")
 	}
 	view := traversal.NewView(loaded)
-	filters, err := parseGraphExportArgs(view, args)
+	filters, outputPath, err := parseGraphExportArgs(view, args)
 	if err != nil {
 		return nil, err
 	}
-	return graphexport.ExportView(loaded, view, handler.buildIdentity, filters, time.Now), nil
+	payload := graphexport.ExportView(loaded, view, handler.buildIdentity, filters, time.Now)
+	if outputPath != "" {
+		return runtimecontract.JSONFileOutput{Path: outputPath, Value: payload}, nil
+	}
+	return payload, nil
 }
 
 func (handler graphHandler) Handle(loadedIndex any, args []string) (any, error) {
@@ -469,45 +473,60 @@ func parseGraphSymbolSetArgs(args []string, command string) (symbolSetArgs, quer
 	return queryArgs, outputMode, nil
 }
 
-func parseGraphExportArgs(view traversal.View, args []string) (graphexport.Filters, error) {
+func parseGraphExportArgs(view traversal.View, args []string) (graphexport.Filters, string, error) {
+	if duplicateFlag(args, "-o") {
+		return graphexport.Filters{}, "", errors.New("-o can only be provided once")
+	}
+
 	var queryArgs symbolSetArgs
 	var packagePrefixes []string
+	var outputPath string
 	for position := 0; position < len(args); position++ {
 		arg := args[position]
 		switch arg {
 		case "--symbol":
-			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
-				return graphexport.Filters{}, errors.New("--symbol requires a value")
+			if position+1 >= len(args) || isMissingGraphExportValue(args[position+1]) {
+				return graphexport.Filters{}, "", errors.New("--symbol requires a value")
 			}
 			queryArgs.symbols = append(queryArgs.symbols, args[position+1])
 			position++
 		case "--name":
-			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
-				return graphexport.Filters{}, errors.New("--name requires a value")
+			if position+1 >= len(args) || isMissingGraphExportValue(args[position+1]) {
+				return graphexport.Filters{}, "", errors.New("--name requires a value")
 			}
 			queryArgs.names = append(queryArgs.names, args[position+1])
 			position++
 		case "--package-prefix":
-			if position+1 >= len(args) || isMissingQueryValue(args[position+1]) {
-				return graphexport.Filters{}, errors.New("--package-prefix requires a value")
+			if position+1 >= len(args) || isMissingGraphExportValue(args[position+1]) {
+				return graphexport.Filters{}, "", errors.New("--package-prefix requires a value")
 			}
 			packagePrefixes = append(packagePrefixes, args[position+1])
 			position++
+		case "-o":
+			if position+1 >= len(args) || isMissingGraphExportValue(args[position+1]) {
+				return graphexport.Filters{}, "", errors.New("-o requires a value")
+			}
+			outputPath = args[position+1]
+			position++
 		case "--one-line", "--json", "--markdown", "--location-only":
-			return graphexport.Filters{}, errors.New(arg + " is not supported for graph-export")
+			return graphexport.Filters{}, "", errors.New(arg + " is not supported for graph-export")
 		default:
-			return graphexport.Filters{}, errors.New("graph-export only accepts --symbol, --name, and --package-prefix")
+			return graphexport.Filters{}, "", errors.New("graph-export only accepts --symbol, --name, --package-prefix, and -o")
 		}
 	}
 
 	symbols, err := resolveSymbolSet(view, queryArgs)
 	if err != nil {
-		return graphexport.Filters{}, err
+		return graphexport.Filters{}, "", err
 	}
 	return graphexport.Filters{
 		Symbols:         symbols,
 		PackagePrefixes: uniqueSortedStrings(packagePrefixes),
-	}, nil
+	}, outputPath, nil
+}
+
+func isMissingGraphExportValue(value string) bool {
+	return isMissingQueryValue(value) || value == "-o"
 }
 
 func graphPayloadForKind(view traversal.View, symbol string, kind graphCommandKind) graphquery.Payload {

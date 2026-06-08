@@ -100,7 +100,7 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"scip-search packages --index <index-path> [--prefix <prefix>] [--one-line|--json]",
 		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
-		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]...",
+		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]",
 		"graph-export     Export the factual SCIP symbol graph as JSON.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
@@ -119,7 +119,7 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"Repeated results are de-duplicated.",
 		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
 		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
-		"graph-export emits JSON only and accepts optional symbol, name, and package-prefix filters.",
+		"graph-export emits JSON only, accepts optional symbol, name, and package-prefix filters, and can write to a file with -o.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
@@ -1115,6 +1115,49 @@ func TestRunProductionGraphExportCommandEmitsJSONArtifact(t *testing.T) {
 	assertExportNodeClosure(t, nodes, edges)
 }
 
+func TestRunProductionGraphExportCommandWritesJSONArtifactToOutputFile(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	outputPath := filepath.Join(t.TempDir(), "graph-export.json")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"graph-export",
+		"--index",
+		fixture.IndexPath,
+		"--package-prefix",
+		"example.com/fixture",
+		"-o",
+		outputPath,
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("graph-export -o status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty when graph-export writes to -o path", stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", outputPath, err)
+	}
+	payload := decodeJSONValue(t, content).(map[string]any)
+	if payload["schema_version"] != "scip.graph-export.v1" {
+		t.Fatalf("schema_version = %#v, want graph export v1", payload["schema_version"])
+	}
+	nodes := payload["nodes"].([]any)
+	edges := payload["edges"].([]any)
+	if len(nodes) == 0 {
+		t.Fatal("nodes is empty, want exported symbols")
+	}
+	assertExportNodeClosure(t, nodes, edges)
+}
+
 func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testing.T) {
 	t.Parallel()
 
@@ -1395,6 +1438,21 @@ func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
 			name:    "graph-export rejects markdown flag",
 			command: "graph-export",
 			args:    []string{"--markdown"},
+		},
+		{
+			name:    "graph-export missing output value",
+			command: "graph-export",
+			args:    []string{"-o"},
+		},
+		{
+			name:    "graph-export flag-shaped output value",
+			command: "graph-export",
+			args:    []string{"-o", "--name"},
+		},
+		{
+			name:    "graph-export duplicate output",
+			command: "graph-export",
+			args:    []string{"-o", "first.json", "-o", "second.json"},
 		},
 	}
 
