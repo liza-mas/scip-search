@@ -361,6 +361,9 @@ func recordDefinitionLocation(locations map[string]string, symbol string, aggreg
 	if symbol == "" {
 		return nil
 	}
+	if scip.IsLocalSymbol(symbol) {
+		return nil
+	}
 	if previous, exists := locations[symbol]; exists && previous != aggregatePath {
 		return NewValidationError(fmt.Sprintf("symbol collision for %q between %q and %q", symbol, previous, aggregatePath))
 	}

@@ -61,6 +61,26 @@ func TestBuildRewritesPathsAndMetadataIntoAggregateProjectRoot(t *testing.T) {
 	}
 }
 
+func TestBuildAllowsRepeatedLocalSymbolsInDifferentDocuments(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	first := writeIndex(t, singleDocumentIndex("", "supabase.ts", "local 4", ""))
+	second := writeIndex(t, singleDocumentIndex("", "api.ts", "local 4", ""))
+
+	index, result, err := Build(aggregateOptions(repoRoot, first, second, "apps/web/src/lib", "services/design-diagnosis/web/src/lib"), version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got, want := documentPaths(index), []string{"apps/web/src/lib/supabase.ts", "services/design-diagnosis/web/src/lib/api.ts"}; !slices.Equal(got, want) {
+		t.Fatalf("document paths = %v, want %v", got, want)
+	}
+	if result.DocumentCount != 2 {
+		t.Fatalf("document count = %d, want 2", result.DocumentCount)
+	}
+}
+
 func TestBuildRejectsInvalidAggregates(t *testing.T) {
 	t.Parallel()
 

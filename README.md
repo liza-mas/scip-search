@@ -250,9 +250,9 @@ scip-search aggregate-index \
 
 The aggregate output metadata uses the supplied aggregate `--project-root`, and every document path is rewritten into that project-root-relative path space, for example `apps/api/server.py` and `services/some-service/worker.py`. If an input index has a comparable `file://` metadata project root, the supplied `--root` must match its relative path from the aggregate project root. `--project-root` accepts an absolute filesystem path or `file://` URI. `--root` values are slash-separated paths relative to the aggregate project root; `.` means the aggregate project root itself.
 
-Aggregation preserves SCIP symbol strings exactly. Cross-root references are available only when the input indexes already use matching SCIP symbol identities. `aggregate-index` does not run language indexers, discover roots, infer imports, rewrite symbols, or repair mismatched package identities.
+Aggregation preserves SCIP symbol strings exactly. Cross-root references are available only when the input indexes already use matching SCIP symbol identities. Local SCIP symbols such as `local 4` are document-scoped and may repeat across aggregate documents. `aggregate-index` does not run language indexers, discover roots, infer imports, rewrite symbols, or repair mismatched package identities.
 
-Malformed `aggregate-index` command lines exit `2`. Unreadable or invalid input SCIP files exit `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate output document paths, root-mapping mismatches, mixed indexer families, symbol collisions, conflicting external symbol records, or an output path that resolves to an input path, exit `4` and leave any existing output file unchanged.
+Malformed `aggregate-index` command lines exit `2`. Unreadable or invalid input SCIP files exit `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate output document paths, root-mapping mismatches, mixed indexer families, non-local symbol collisions, conflicting external symbol records, or an output path that resolves to an input path, exit `4` and leave any existing output file unchanged.
 
 ### Language Support
 
