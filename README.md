@@ -70,7 +70,7 @@ The appropriate indexers per language need to be installed in the environment.
 |------------|--------------------|----------------------------------------------|---------|------------|-----------------|
 | Go         | `scip-go`          | `go install github.com/scip-code/scip-go/cmd/scip-go@latest` | ✓ | ✓ | ✓ |
 | TypeScript | `scip-typescript`  | `npm install -g @sourcegraph/scip-typescript` | ✓ | ✓ | ✓ |
-| Python     | `scip-python`      | `pip install scip-python`                    | ✓ | partial | — |
+| Python     | `scip-python`      | `npm install -g @sourcegraph/scip-python`    | ✓ | partial | — |
 | Java/Kotlin/Scala | `scip-java` | via Gradle/Maven plugin                      | ✓ | ✓ | ✓ |
 | Rust       | `rust-analyzer`    | ships with rustup                            | ✓ | ✓ | ✓ |
 
