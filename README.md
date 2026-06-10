@@ -353,3 +353,5 @@ scip-search --version
 Local clone installs also require caller-provided Go and make. Use
 `INSTALL_DIR=<directory> make install` to install from a local clone into a
 custom directory, then verify with `<directory>/scip-search --version`.
+
+Release notes are available in [`docs/release_notes/`](docs/release_notes/).
