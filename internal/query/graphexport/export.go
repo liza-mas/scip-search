@@ -42,6 +42,7 @@ type Inputs struct {
 type SCIPIndexInput struct {
 	Path        string `json:"path"`
 	Fingerprint string `json:"fingerprint"`
+	ProjectRoot string `json:"project_root"`
 }
 
 type Node struct {
@@ -120,6 +121,7 @@ func ExportView(
 			SCIPIndex: SCIPIndexInput{
 				Path:        loaded.Path,
 				Fingerprint: loaded.Fingerprint,
+				ProjectRoot: view.Metadata().ProjectRoot,
 			},
 		},
 		Nodes: nodes,

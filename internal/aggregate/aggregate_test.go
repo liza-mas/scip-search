@@ -1,0 +1,242 @@
+package aggregate
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/scip-code/scip/bindings/go/scip"
+	"google.golang.org/protobuf/proto"
+
+	"scip-search/internal/version"
+)
+
+const (
+	targetSymbol   = "scip-typescript npm example 1.0.0 src/Target#"
+	sharedExternal = "scip-typescript npm dependency 1.0.0 dep/External#"
+)
+
+func TestBuildRewritesPathsAndMetadataIntoAggregateProjectRoot(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	inputOne := writeIndex(t, singleDocumentIndex(
+		"file://"+filepath.ToSlash(filepath.Join(repoRoot, "apps", "web", "src")),
+		"App.tsx",
+		targetSymbol,
+		sharedExternal,
+	))
+	inputTwo := writeIndex(t, singleDocumentIndex(
+		"file://"+filepath.ToSlash(filepath.Join(repoRoot, "services", "api")),
+		"../api.py",
+		"scip-typescript npm example 1.0.0 api/API#",
+		sharedExternal,
+	))
+
+	index, result, err := Build(Options{
+		ProjectRoot: repoRoot + string(os.PathSeparator),
+		OutPath:     filepath.Join(t.TempDir(), "aggregate.scip"),
+		Pairs: []Pair{
+			{Root: "apps/web/src", IndexPath: inputOne},
+			{Root: "services/api", IndexPath: inputTwo},
+		},
+	}, version.BuildIdentity{Release: "v1.2.3"})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if index.GetMetadata().GetProjectRoot() != "file://"+filepath.ToSlash(repoRoot) {
+		t.Fatalf("project_root = %q, want aggregate repo root", index.GetMetadata().GetProjectRoot())
+	}
+	if index.GetMetadata().GetToolInfo().GetName() != ProducerName {
+		t.Fatalf("tool name = %q, want aggregate producer", index.GetMetadata().GetToolInfo().GetName())
+	}
+	if got, want := documentPaths(index), []string{"apps/web/src/App.tsx", "services/api.py"}; !slices.Equal(got, want) {
+		t.Fatalf("document paths = %v, want %v", got, want)
+	}
+	if result.DocumentCount != 2 || result.ExternalSymbolCount != 1 {
+		t.Fatalf("result = %+v, want 2 documents and 1 deduped external", result)
+	}
+}
+
+func TestBuildRejectsInvalidAggregates(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	tests := []struct {
+		name    string
+		options func(t *testing.T) Options
+		want    string
+	}{
+		{
+			name: "duplicate document paths",
+			options: func(t *testing.T) Options {
+				first := writeIndex(t, singleDocumentIndex("", "main.ts", targetSymbol, ""))
+				second := writeIndex(t, singleDocumentIndex("", "main.ts", "scip-typescript npm example 1.0.0 src/Other#", ""))
+				return aggregateOptions(repoRoot, first, second, ".", ".")
+			},
+			want: "duplicate aggregate document path",
+		},
+		{
+			name: "root mapping mismatch",
+			options: func(t *testing.T) Options {
+				first := writeIndex(t, singleDocumentIndex("file://"+filepath.ToSlash(filepath.Join(repoRoot, "apps", "web")), "main.ts", targetSymbol, ""))
+				second := writeIndex(t, singleDocumentIndex("", "other.ts", "scip-typescript npm example 1.0.0 src/Other#", ""))
+				return aggregateOptions(repoRoot, first, second, "apps/api", "services/api")
+			},
+			want: "root mapping mismatch",
+		},
+		{
+			name: "symbol collision",
+			options: func(t *testing.T) Options {
+				first := writeIndex(t, singleDocumentIndex("", "main.ts", targetSymbol, ""))
+				second := writeIndex(t, singleDocumentIndex("", "other.ts", targetSymbol, ""))
+				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
+			},
+			want: "symbol collision",
+		},
+		{
+			name: "document symbol collision without definition occurrence",
+			options: func(t *testing.T) Options {
+				firstIndex := singleDocumentIndex("", "main.ts", targetSymbol, "")
+				firstIndex.Documents[0].Occurrences = nil
+				secondIndex := singleDocumentIndex("", "other.ts", targetSymbol, "")
+				secondIndex.Documents[0].Occurrences = nil
+				first := writeIndex(t, firstIndex)
+				second := writeIndex(t, secondIndex)
+				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
+			},
+			want: "symbol collision",
+		},
+		{
+			name: "conflicting external symbol",
+			options: func(t *testing.T) Options {
+				first := writeIndex(t, indexWithExternal("ExternalA"))
+				second := writeIndex(t, indexWithExternal("ExternalB"))
+				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
+			},
+			want: "conflicting external symbol record",
+		},
+		{
+			name: "mixed indexer families",
+			options: func(t *testing.T) Options {
+				first := writeIndex(t, indexWithTool("scip-python", "main.py", "scip-python pip example 1.0.0 main/Foo#"))
+				second := writeIndex(t, indexWithTool("scip-typescript", "main.ts", "scip-typescript npm example 1.0.0 main/Foo#"))
+				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
+			},
+			want: "mixed indexer families",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := Build(test.options(t), version.BuildIdentity{})
+
+			if err == nil || !IsValidationError(err) || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Build() error = %v, want validation containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestRunLeavesExistingOutputUnchangedOnValidationFailure(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	first := writeIndex(t, singleDocumentIndex("", "main.ts", targetSymbol, ""))
+	second := writeIndex(t, singleDocumentIndex("", "main.ts", "scip-typescript npm example 1.0.0 src/Other#", ""))
+	outPath := filepath.Join(t.TempDir(), "aggregate.scip")
+	original := []byte("keep me")
+	if err := os.WriteFile(outPath, original, 0o600); err != nil {
+		t.Fatalf("write existing output: %v", err)
+	}
+
+	_, err := Run(aggregateOptions(repoRoot, first, second, ".", "."), version.BuildIdentity{})
+
+	if err == nil || !IsValidationError(err) {
+		t.Fatalf("Run() error = %v, want validation failure", err)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if !slices.Equal(got, original) {
+		t.Fatalf("output bytes = %q, want unchanged %q", got, original)
+	}
+}
+
+func aggregateOptions(repoRoot string, first string, second string, firstRoot string, secondRoot string) Options {
+	return Options{
+		ProjectRoot: repoRoot,
+		OutPath:     filepath.Join(filepath.Dir(first), "aggregate.scip"),
+		Pairs: []Pair{
+			{Root: firstRoot, IndexPath: first},
+			{Root: secondRoot, IndexPath: second},
+		},
+	}
+}
+
+func singleDocumentIndex(projectRoot string, relativePath string, symbol string, externalSymbol string) *scip.Index {
+	index := indexWithTool("scip-typescript", relativePath, symbol)
+	index.Metadata.ProjectRoot = projectRoot
+	if externalSymbol != "" {
+		index.ExternalSymbols = []*scip.SymbolInformation{{Symbol: externalSymbol, DisplayName: "External"}}
+	}
+	return index
+}
+
+func indexWithExternal(displayName string) *scip.Index {
+	index := indexWithTool("scip-typescript", "main.ts", "scip-typescript npm example 1.0.0 src/"+displayName+"#")
+	index.ExternalSymbols = []*scip.SymbolInformation{{Symbol: sharedExternal, DisplayName: displayName}}
+	return index
+}
+
+func indexWithTool(toolName string, relativePath string, symbol string) *scip.Index {
+	return &scip.Index{
+		Metadata: &scip.Metadata{
+			Version:              scip.ProtocolVersion_UnspecifiedProtocolVersion,
+			TextDocumentEncoding: scip.TextEncoding_UTF8,
+			ToolInfo:             &scip.ToolInfo{Name: toolName, Version: "test"},
+		},
+		Documents: []*scip.Document{
+			{
+				RelativePath: relativePath,
+				Language:     "typescript",
+				Symbols:      []*scip.SymbolInformation{{Symbol: symbol, DisplayName: "Target"}},
+				Occurrences: []*scip.Occurrence{
+					{
+						Symbol:      symbol,
+						Range:       []int32{1, 2, 3},
+						SymbolRoles: int32(scip.SymbolRole_Definition),
+					},
+				},
+			},
+		},
+	}
+}
+
+func writeIndex(t *testing.T, index *scip.Index) string {
+	t.Helper()
+
+	payload, err := proto.Marshal(index)
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "index.scip")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	return path
+}
+
+func documentPaths(index *scip.Index) []string {
+	paths := make([]string, 0, len(index.GetDocuments()))
+	for _, document := range index.GetDocuments() {
+		paths = append(paths, document.GetRelativePath())
+	}
+	return paths
+}

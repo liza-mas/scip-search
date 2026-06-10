@@ -4,9 +4,10 @@ package runtime
 type Status int
 
 const (
-	StatusOK        Status = 0
-	StatusUsage     Status = 2
-	StatusIndexLoad Status = 3
+	StatusOK         Status = 0
+	StatusUsage      Status = 2
+	StatusIndexLoad  Status = 3
+	StatusValidation Status = 4
 )
 
 // Failure identifies a shared runtime failure without defining command payloads.
@@ -27,6 +28,14 @@ func UsageFailure(message string) Failure {
 func IndexLoadFailure(message string) Failure {
 	return Failure{
 		status:  StatusIndexLoad,
+		message: message,
+	}
+}
+
+// ValidationFailure classifies valid input that fails command-specific validation.
+func ValidationFailure(message string) Failure {
+	return Failure{
+		status:  StatusValidation,
 		message: message,
 	}
 }

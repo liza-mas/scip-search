@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"scip-search/internal/aggregate"
 	"scip-search/internal/cli"
 	"scip-search/internal/query/discovery"
 	graphquery "scip-search/internal/query/graph"
@@ -35,6 +37,10 @@ func runWithBuildIdentity(
 	stderr io.Writer,
 	buildIdentity version.BuildIdentity,
 ) runtimecontract.Status {
+	if len(args) > 0 && args[0] == "aggregate-index" {
+		return runAggregateIndex(args[1:], stderr, buildIdentity)
+	}
+
 	cliRuntime := cli.NewProductionRuntimeWithBuildIdentity(map[string]cli.Handler{
 		"symbols":         symbolsHandler{},
 		"references":      referencesHandler{},
@@ -48,6 +54,24 @@ func runWithBuildIdentity(
 	}, buildIdentity)
 
 	return cliRuntime.Run(args, stdout, stderr)
+}
+
+func runAggregateIndex(args []string, stderr io.Writer, buildIdentity version.BuildIdentity) runtimecontract.Status {
+	options, err := aggregate.ParseArgs(args)
+	if err != nil {
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+	}
+	if _, err := aggregate.Run(options, buildIdentity); err != nil {
+		var failure runtimecontract.Failure
+		if errors.As(err, &failure) && failure.Status() == runtimecontract.StatusIndexLoad {
+			return runtimecontract.WriteDiagnostic(stderr, runtimecontract.IndexLoadFailure(err.Error()))
+		}
+		if aggregate.IsValidationError(err) {
+			return runtimecontract.WriteDiagnostic(stderr, runtimecontract.ValidationFailure(err.Error()))
+		}
+		return runtimecontract.WriteDiagnostic(stderr, runtimecontract.UsageFailure(err.Error()))
+	}
+	return runtimecontract.StatusOK
 }
 
 type symbolsHandler struct{}
@@ -68,11 +92,19 @@ func (symbolsHandler) Handle(loadedIndex any, args []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return runtimecontract.RawOutput{Text: text}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(view, text)}, nil
 	case symbolsOutputJSON:
-		return discovery.FlatSymbolsByNames(view, names)
+		payload, err := discovery.FlatSymbolsByNames(view, names)
+		if err != nil {
+			return nil, err
+		}
+		return withProjectRoot(view, payload), nil
 	case symbolsOutputNestedJSON:
-		return discovery.SymbolsByNames(view, names)
+		payload, err := discovery.SymbolsByNames(view, names)
+		if err != nil {
+			return nil, err
+		}
+		return withProjectRoot(view, payload), nil
 	default:
 		return nil, errors.New("unknown symbols output mode")
 	}
@@ -191,13 +223,13 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 			return nil, err
 		}
 		if outputMode == outputJSON {
-			return payload, nil
+			return withProjectRoot(traversal.NewView(loaded), payload), nil
 		}
 		if outputMode == outputLocationOnly {
 			return runtimecontract.RawOutput{Text: implementations.LocationOnly(payload)}, nil
 		}
 
-		return runtimecontract.RawOutput{Text: implementations.OneLine(payload)}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(traversal.NewView(loaded), implementations.OneLine(payload))}, nil
 	}
 
 	payload, err := implementationQueries(traversal.NewView(loaded), symbols)
@@ -205,13 +237,13 @@ func (implementationsHandler) Handle(loadedIndex any, args []string) (any, error
 		return nil, err
 	}
 	if outputMode == outputJSON {
-		return payload, nil
+		return withProjectRoot(traversal.NewView(loaded), payload), nil
 	}
 	if outputMode == outputLocationOnly {
 		return runtimecontract.RawOutput{Text: locationOnlyImplementationQueries(payload)}, nil
 	}
 
-	return runtimecontract.RawOutput{Text: oneLineImplementationQueries(payload)}, nil
+	return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(traversal.NewView(loaded), oneLineImplementationQueries(payload))}, nil
 }
 
 type referencesHandler struct{}
@@ -229,24 +261,24 @@ func (referencesHandler) Handle(loadedIndex any, args []string) (any, error) {
 	if !usesName && len(symbols) == 1 {
 		payload := references.Query(traversal.NewView(loaded), symbols[0])
 		if outputMode == outputJSON {
-			return payload, nil
+			return withProjectRoot(traversal.NewView(loaded), payload), nil
 		}
 		if outputMode == outputLocationOnly {
 			return runtimecontract.RawOutput{Text: references.LocationOnly(payload)}, nil
 		}
 
-		return runtimecontract.RawOutput{Text: references.OneLine(payload)}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(traversal.NewView(loaded), references.OneLine(payload))}, nil
 	}
 
 	payload := referenceQueries(traversal.NewView(loaded), symbols)
 	if outputMode == outputJSON {
-		return payload, nil
+		return withProjectRoot(traversal.NewView(loaded), payload), nil
 	}
 	if outputMode == outputLocationOnly {
 		return runtimecontract.RawOutput{Text: locationOnlyReferenceQueries(payload)}, nil
 	}
 
-	return runtimecontract.RawOutput{Text: oneLineReferenceQueries(payload)}, nil
+	return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(traversal.NewView(loaded), oneLineReferenceQueries(payload))}, nil
 }
 
 func parsePackagePrefixArgs(args []string) (string, queryOutputMode, error) {
@@ -373,18 +405,18 @@ func (handler graphHandler) Handle(loadedIndex any, args []string) (any, error) 
 	if handler.kind == graphCommandImpact {
 		if !usesName && len(symbols) == 1 {
 			payload := graphquery.Impact(view, symbols[0])
-			return graphImpactOutput(payload, outputMode)
+			return graphImpactOutput(view, payload, outputMode)
 		}
 		payload := impactQueries(view, symbols)
-		return graphImpactQueriesOutput(payload, outputMode)
+		return graphImpactQueriesOutput(view, payload, outputMode)
 	}
 
 	if !usesName && len(symbols) == 1 {
 		payload := graphPayloadForKind(view, symbols[0], handler.kind)
-		return graphOutput(payload, outputMode)
+		return graphOutput(view, payload, outputMode)
 	}
 	payload := graphQueries(view, symbols, handler.kind)
-	return graphQueriesOutput(payload, outputMode)
+	return graphQueriesOutput(view, payload, outputMode)
 }
 
 func (handler graphHandler) commandName() string {
@@ -557,21 +589,21 @@ func impactQueries(view traversal.View, symbols []string) impactQueriesPayload {
 	return impactQueriesPayload{Symbols: symbols, Queries: queries}
 }
 
-func graphOutput(payload graphquery.Payload, outputMode queryOutputMode) (any, error) {
+func graphOutput(view traversal.View, payload graphquery.Payload, outputMode queryOutputMode) (any, error) {
 	switch outputMode {
 	case outputJSON:
-		return payload, nil
+		return withProjectRoot(view, payload), nil
 	case outputMarkdown:
-		return runtimecontract.RawOutput{Text: graphquery.Markdown(payload)}, nil
+		return runtimecontract.RawOutput{Text: markdownWithProjectRoot(view, graphquery.Markdown(payload))}, nil
 	default:
-		return runtimecontract.RawOutput{Text: graphquery.OneLine(payload)}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(view, graphquery.OneLine(payload))}, nil
 	}
 }
 
-func graphQueriesOutput(payload graphQueriesPayload, outputMode queryOutputMode) (any, error) {
+func graphQueriesOutput(view traversal.View, payload graphQueriesPayload, outputMode queryOutputMode) (any, error) {
 	switch outputMode {
 	case outputJSON:
-		return payload, nil
+		return withProjectRoot(view, payload), nil
 	case outputMarkdown:
 		var builder strings.Builder
 		for index, query := range payload.Queries {
@@ -580,7 +612,7 @@ func graphQueriesOutput(payload graphQueriesPayload, outputMode queryOutputMode)
 			}
 			builder.WriteString(graphquery.Markdown(query))
 		}
-		return runtimecontract.RawOutput{Text: builder.String()}, nil
+		return runtimecontract.RawOutput{Text: markdownWithProjectRoot(view, builder.String())}, nil
 	default:
 		var builder strings.Builder
 		seen := map[string]struct{}{}
@@ -597,25 +629,25 @@ func graphQueriesOutput(payload graphQueriesPayload, outputMode queryOutputMode)
 				builder.WriteString("\n")
 			}
 		}
-		return runtimecontract.RawOutput{Text: builder.String()}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(view, builder.String())}, nil
 	}
 }
 
-func graphImpactOutput(payload graphquery.ImpactPayload, outputMode queryOutputMode) (any, error) {
+func graphImpactOutput(view traversal.View, payload graphquery.ImpactPayload, outputMode queryOutputMode) (any, error) {
 	switch outputMode {
 	case outputJSON:
-		return payload, nil
+		return withProjectRoot(view, payload), nil
 	case outputMarkdown:
-		return runtimecontract.RawOutput{Text: graphquery.ImpactMarkdown(payload)}, nil
+		return runtimecontract.RawOutput{Text: markdownWithProjectRoot(view, graphquery.ImpactMarkdown(payload))}, nil
 	default:
-		return runtimecontract.RawOutput{Text: graphquery.ImpactOneLine(payload)}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(view, graphquery.ImpactOneLine(payload))}, nil
 	}
 }
 
-func graphImpactQueriesOutput(payload impactQueriesPayload, outputMode queryOutputMode) (any, error) {
+func graphImpactQueriesOutput(view traversal.View, payload impactQueriesPayload, outputMode queryOutputMode) (any, error) {
 	switch outputMode {
 	case outputJSON:
-		return payload, nil
+		return withProjectRoot(view, payload), nil
 	case outputMarkdown:
 		var builder strings.Builder
 		for index, query := range payload.Queries {
@@ -624,7 +656,7 @@ func graphImpactQueriesOutput(payload impactQueriesPayload, outputMode queryOutp
 			}
 			builder.WriteString(graphquery.ImpactMarkdown(query))
 		}
-		return runtimecontract.RawOutput{Text: builder.String()}, nil
+		return runtimecontract.RawOutput{Text: markdownWithProjectRoot(view, builder.String())}, nil
 	default:
 		var builder strings.Builder
 		seen := map[string]struct{}{}
@@ -641,8 +673,48 @@ func graphImpactQueriesOutput(payload impactQueriesPayload, outputMode queryOutp
 				builder.WriteString("\n")
 			}
 		}
-		return runtimecontract.RawOutput{Text: builder.String()}, nil
+		return runtimecontract.RawOutput{Text: oneLineWithProjectRoot(view, builder.String())}, nil
 	}
+}
+
+type projectRootPayload struct {
+	projectRoot string
+	payload     any
+}
+
+func withProjectRoot(view traversal.View, payload any) projectRootPayload {
+	return projectRootPayload{projectRoot: view.Metadata().ProjectRoot, payload: payload}
+}
+
+func (payload projectRootPayload) MarshalJSON() ([]byte, error) {
+	rawPayload, err := json.Marshal(payload.payload)
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(rawPayload, &object); err != nil {
+		return nil, err
+	}
+	projectRoot, err := json.Marshal(payload.projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	object["project_root"] = projectRoot
+	return json.Marshal(object)
+}
+
+func oneLineWithProjectRoot(view traversal.View, text string) string {
+	if text == "" {
+		return ""
+	}
+	return fmt.Sprintf("# project_root=%s\n%s", view.Metadata().ProjectRoot, text)
+}
+
+func markdownWithProjectRoot(view traversal.View, text string) string {
+	if text == "" {
+		return ""
+	}
+	return fmt.Sprintf("Project root: %s\n%s", view.Metadata().ProjectRoot, text)
 }
 
 func parseAndResolveSymbolSet(

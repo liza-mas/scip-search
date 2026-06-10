@@ -37,6 +37,7 @@ Usage:
   scip-search callees --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]
   scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]
+  scip-search aggregate-index --project-root <path-or-file-uri> --root <repo-relative-root> --index <input-scip-path> [--root <repo-relative-root> --index <input-scip-path>]... --out <output-scip-path>
 
 Commands:
   symbols          Find symbols by literal partial name.
@@ -48,6 +49,7 @@ Commands:
   callees          Show static outgoing dependencies for symbols.
   impact           Show static review, dependency, and test hints for symbols.
   graph-export     Export the factual SCIP symbol graph as JSON.
+  aggregate-index  Build one standard SCIP index from multiple same-language input indexes.
 
 Output:
   --one-line     Grep-style text output; default for all query commands.
@@ -72,6 +74,7 @@ Notes:
   references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.
   graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.
   graph-export emits JSON only, accepts optional symbol, name, and package-prefix filters, and can write to a file with -o.
+  aggregate-index is a pre-query artifact generation step; query commands still read one caller-selected --index.
   Reads an existing SCIP index; does not generate, update, or discover indexes.
 
 Exit codes:
@@ -79,12 +82,14 @@ Exit codes:
   1  unexpected runtime error
   2  usage error
   3  index loading error
+  4  aggregate validation error
 
 Examples:
   scip-search symbols --index go.scip --name Handler
   scip-search references --index go.scip --name Handler --one-line
   scip-search graph --index go.scip --name Handler
   scip-search impact --index go.scip --name Handler --markdown
+  scip-search aggregate-index --project-root /repo --root apps/web --index apps/web/index.scip --root services/api --index services/api/index.scip --out typescript.scip
 `
 
 // Loader is the boundary that later runtime stages use after command selection.

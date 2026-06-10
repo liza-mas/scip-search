@@ -101,7 +101,9 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"scip-search graph --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search impact --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--one-line|--json|--markdown]",
 		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]",
+		"scip-search aggregate-index --project-root <path-or-file-uri>",
 		"graph-export     Export the factual SCIP symbol graph as JSON.",
+		"aggregate-index  Build one standard SCIP index from multiple same-language input indexes.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
 		"--markdown     Multi-line Markdown text for graph and impact commands.",
@@ -120,9 +122,11 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"references, implementations, graph, callers, callees, and impact require --symbol, --name, or both.",
 		"graph, callers, callees, and impact are static SCIP-derived hints, not complete runtime call graphs.",
 		"graph-export emits JSON only, accepts optional symbol, name, and package-prefix filters, and can write to a file with -o.",
+		"aggregate-index is a pre-query artifact generation step; query commands still read one caller-selected --index.",
 		"Reads an existing SCIP index; does not generate, update, or discover indexes.",
 		"Exit codes:",
 		"2  usage error",
+		"4  aggregate validation error",
 		"Examples:",
 	} {
 		if !strings.Contains(stdout.String(), want) {
@@ -353,8 +357,8 @@ func TestRunProductionSymbolsCommandDefaultsToOneLineOutput(t *testing.T) {
 		"supervisor/supervisor.go:19:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/SupervisorConfig#\"; match=descriptor; text=supervisor/SupervisorConfig#",
 		"",
 	}, "\n")
-	if stdout.String() != want {
-		t.Fatalf("symbols stdout = %q, want one-line output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("symbols stdout = %q, want one-line output %q", got, want)
 	}
 }
 
@@ -373,8 +377,8 @@ func TestRunProductionSymbolsCommandAcceptsExplicitOneLineOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	if want := "supervisor/run.go:7:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Run().\"; match=displayName; text=Run\n"; stdout.String() != want {
-		t.Fatalf("symbols --one-line stdout = %q, want %q", stdout.String(), want)
+	if want := "supervisor/run.go:7:6 symbol=\"scip-go gomod github.com/liza-mas/liza . supervisor/Run().\"; match=displayName; text=Run\n"; withoutProjectRootHeader(stdout.String()) != want {
+		t.Fatalf("symbols --one-line stdout = %q, want %q", withoutProjectRootHeader(stdout.String()), want)
 	}
 }
 
@@ -393,7 +397,7 @@ func TestRunProductionSymbolsCommandAcceptsNestedJSONOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json")
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "symbols-supervisor.json", fixture.View.Metadata().ProjectRoot)
 }
 
 func TestRunProductionSymbolsCommandAcceptsJSONOutput(t *testing.T) {
@@ -563,7 +567,7 @@ func TestRunProductionPackagesCommandAcceptsJSONOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json")
+	assertProductionJSONMatchesGolden(t, stdout.Bytes(), "packages-all.json", "")
 }
 
 func TestRunProductionImplementationsCommandDefaultsToOneLineOutput(t *testing.T) {
@@ -582,8 +586,8 @@ func TestRunProductionImplementationsCommandDefaultsToOneLineOutput(t *testing.T
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := "cmd/alpha.go:3:7 symbol=\"scip-go gomod example.com/fixture . cmd/Alpha().\"\n"
-	if stdout.String() != want {
-		t.Fatalf("implementations stdout = %q, want one-line output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("implementations stdout = %q, want one-line output %q", got, want)
 	}
 }
 
@@ -602,7 +606,7 @@ func TestRunProductionImplementationsCommandAcceptsJSONOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json")
+	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-impl.json", fixture.View.Metadata().ProjectRoot)
 }
 
 func TestRunProductionImplementationsCommandAcceptsLocationOnlyOutput(t *testing.T) {
@@ -651,8 +655,8 @@ func TestRunProductionImplementationsCommandAcceptsNameResolution(t *testing.T) 
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	want := "impl/concrete.go:4:3 symbol=\"scip-go gomod example.com/name . impl/ConcreteDoer#\"\n"
-	if stdout.String() != want {
-		t.Fatalf("implementations --name stdout = %q, want one-line output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("implementations --name stdout = %q, want one-line output %q", got, want)
 	}
 }
 
@@ -786,8 +790,8 @@ func TestRunProductionReferencesCommandDefaultsToOneLineOutput(t *testing.T) {
 		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
-	if stdout.String() != want {
-		t.Fatalf("references stdout = %q, want one-line output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("references stdout = %q, want one-line output %q", got, want)
 	}
 }
 
@@ -806,7 +810,7 @@ func TestRunProductionReferencesCommandAcceptsJSONOutput(t *testing.T) {
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-beta.json")
+	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-beta.json", fixture.View.Metadata().ProjectRoot)
 }
 
 func TestRunProductionReferencesCommandAcceptsLocationOnlyOutput(t *testing.T) {
@@ -863,8 +867,8 @@ func TestRunProductionReferencesCommandAcceptsNameResolution(t *testing.T) {
 		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
-	if stdout.String() != want {
-		t.Fatalf("references --name stdout = %q, want one-line output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("references --name stdout = %q, want one-line output %q", got, want)
 	}
 }
 
@@ -888,8 +892,8 @@ func TestRunProductionReferencesCommandNameResolutionDeduplicatesRelatedSymbols(
 		"pkg/beta.go:13:5 symbol=\"scip-go gomod example.com/fixture . pkg/Beta#\"; roles=8",
 		"",
 	}, "\n")
-	if stdout.String() != want {
-		t.Fatalf("references --name overlapping symbols stdout = %q, want deduplicated output %q", stdout.String(), want)
+	if got := withoutProjectRootHeader(stdout.String()); got != want {
+		t.Fatalf("references --name overlapping symbols stdout = %q, want deduplicated output %q", got, want)
 	}
 }
 
@@ -1107,12 +1111,202 @@ func TestRunProductionGraphExportCommandEmitsJSONArtifact(t *testing.T) {
 	if fingerprint, ok := scipIndex["fingerprint"].(string); !ok || !strings.HasPrefix(fingerprint, "sha256:") {
 		t.Fatalf("fingerprint = %#v, want sha256 fingerprint", scipIndex["fingerprint"])
 	}
+	if scipIndex["project_root"] != fixture.View.Metadata().ProjectRoot {
+		t.Fatalf("project_root = %#v, want selected index project root %q", scipIndex["project_root"], fixture.View.Metadata().ProjectRoot)
+	}
 	nodes := payload["nodes"].([]any)
 	edges := payload["edges"].([]any)
 	if len(nodes) == 0 {
 		t.Fatal("nodes is empty, want exported symbols")
 	}
 	assertExportNodeClosure(t, nodes, edges)
+}
+
+func TestRunAggregateIndexWritesValidAggregateSCIP(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	first := writeAggregateInputIndex(t, repoRoot, "apps/web/src", "App.tsx", "scip-typescript npm example 1.0.0 web/App#")
+	second := writeAggregateInputIndex(t, repoRoot, "services/api", "../api.ts", "scip-typescript npm example 1.0.0 api/API#")
+	outPath := filepath.Join(t.TempDir(), "typescript.scip")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"aggregate-index",
+		"--project-root",
+		repoRoot + string(os.PathSeparator),
+		"--root",
+		"apps/web/src",
+		"--index",
+		first,
+		"--root",
+		"services/api",
+		"--index",
+		second,
+		"--out",
+		outPath,
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("aggregate-index status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stdout.String() != "" || stderr.String() != "" {
+		t.Fatalf("stdout = %q stderr = %q, want both empty", stdout.String(), stderr.String())
+	}
+	aggregateIndex := readSCIPIndex(t, outPath)
+	if aggregateIndex.GetMetadata().GetProjectRoot() != "file://"+filepath.ToSlash(repoRoot) {
+		t.Fatalf("aggregate project_root = %q, want repo root", aggregateIndex.GetMetadata().GetProjectRoot())
+	}
+	if got, want := aggregateDocumentPaths(aggregateIndex), []string{"apps/web/src/App.tsx", "services/api.ts"}; !slices.Equal(got, want) {
+		t.Fatalf("aggregate document paths = %v, want %v", got, want)
+	}
+}
+
+func TestRunAggregateIndexStatusMapping(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	valid := writeAggregateInputIndex(t, repoRoot, "apps/a", "main.ts", "scip-typescript npm example 1.0.0 a/Main#")
+	duplicate := writeAggregateInputIndex(t, repoRoot, "apps/b", "main.ts", "scip-typescript npm example 1.0.0 b/Main#")
+	tests := []struct {
+		name   string
+		args   []string
+		status runtimecontract.Status
+	}{
+		{
+			name:   "malformed pairs are usage",
+			args:   []string{"aggregate-index", "--project-root", repoRoot, "--root", "apps/a", "--out", filepath.Join(t.TempDir(), "out.scip")},
+			status: runtimecontract.StatusUsage,
+		},
+		{
+			name: "invalid input is index load",
+			args: []string{
+				"aggregate-index", "--project-root", repoRoot,
+				"--root", "apps/a", "--index", writeSelectedIndexBytes(t, []byte("not scip")),
+				"--root", "apps/b", "--index", valid,
+				"--out", filepath.Join(t.TempDir(), "out.scip"),
+			},
+			status: runtimecontract.StatusIndexLoad,
+		},
+		{
+			name: "aggregate validation is status 4",
+			args: []string{
+				"aggregate-index", "--project-root", repoRoot,
+				"--root", ".", "--index", valid,
+				"--root", ".", "--index", duplicate,
+				"--out", filepath.Join(t.TempDir(), "out.scip"),
+			},
+			status: runtimecontract.StatusValidation,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := run(test.args, &stdout, &stderr)
+
+			if status != test.status {
+				t.Fatalf("run(%v) status = %d, want %d; stderr = %q", test.args, status, test.status, stderr.String())
+			}
+			if stdout.String() != "" {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+			if stderr.String() == "" {
+				t.Fatal("stderr is empty, want diagnostic")
+			}
+		})
+	}
+}
+
+func TestRunProjectRootMetadataForPathBearingOutputs(t *testing.T) {
+	t.Parallel()
+
+	fixture := traversaltest.LoadSharedFixture(t)
+	header := "# project_root=" + fixture.View.Metadata().ProjectRoot + "\n"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Run", "--one-line"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols --one-line status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if !strings.HasPrefix(stdout.String(), header) {
+		t.Fatalf("symbols --one-line stdout = %q, want project-root header %q", stdout.String(), header)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	status = run([]string{"symbols", "--index", fixture.IndexPath, "--name", "Run", "--nested-json"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("symbols --nested-json status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+	assertProjectRootField(t, payload, fixture.View.Metadata().ProjectRoot)
+
+	for _, test := range []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "symbols json",
+			args: []string{"symbols", "--index", fixture.IndexPath, "--name", "Run", "--json"},
+		},
+		{
+			name: "references json",
+			args: []string{"references", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--json"},
+		},
+		{
+			name: "implementations json",
+			args: []string{"implementations", "--index", fixture.IndexPath, "--symbol", traversaltest.ImplSymbol, "--json"},
+		},
+		{
+			name: "graph json",
+			args: []string{"graph", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--json"},
+		},
+		{
+			name: "callers json",
+			args: []string{"callers", "--index", fixture.IndexPath, "--symbol", traversaltest.BetaSymbol, "--json"},
+		},
+		{
+			name: "callees json",
+			args: []string{"callees", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--json"},
+		},
+		{
+			name: "impact json",
+			args: []string{"impact", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--json"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			status := run(test.args, &stdout, &stderr)
+
+			if status != runtimecontract.StatusOK {
+				t.Fatalf("%s status = %d, want %d; stderr = %q", test.name, status, runtimecontract.StatusOK, stderr.String())
+			}
+			payload := decodeJSONValue(t, stdout.Bytes()).(map[string]any)
+			assertProjectRootField(t, payload, fixture.View.Metadata().ProjectRoot)
+		})
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	status = run([]string{"references", "--index", fixture.IndexPath, "--symbol", traversaltest.AlphaSymbol, "--location-only"}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("references --location-only status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "project_root") {
+		t.Fatalf("references --location-only stdout = %q, want no project-root header", stdout.String())
+	}
 }
 
 func TestRunProductionGraphExportCommandWritesJSONArtifactToOutputFile(t *testing.T) {
@@ -1173,7 +1367,7 @@ func TestRunProductionImplementationsEmptyResultPreservesQueriedSymbol(t *testin
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-alpha.json")
+	assertProductionImplementationsJSONMatchesGolden(t, stdout.Bytes(), "implementations-alpha.json", fixture.View.Metadata().ProjectRoot)
 }
 
 func TestRunProductionReferencesCommandReturnsEmptyResultsForAbsentExactSymbol(t *testing.T) {
@@ -1198,7 +1392,7 @@ func TestRunProductionReferencesCommandReturnsEmptyResultsForAbsentExactSymbol(t
 	if stderr.String() != "" {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-absent.json")
+	assertProductionJSONMatchesReferenceGolden(t, stdout.Bytes(), "references-absent.json", fixture.View.Metadata().ProjectRoot)
 }
 
 func TestRunProductionQuerySpecificArgumentUsageFailures(t *testing.T) {
@@ -1810,21 +2004,23 @@ func assertSingleJSONCommand(t *testing.T, output []byte, command string) {
 	}
 }
 
-func assertProductionJSONMatchesGolden(t *testing.T, output []byte, goldenFile string) {
+func assertProductionJSONMatchesGolden(t *testing.T, output []byte, goldenFile string, expectedProjectRoot string) {
 	t.Helper()
 
 	got := decodeJSONValue(t, output)
 	want := readDiscoveryGoldenJSONValue(t, goldenFile)
+	alignProjectRoot(t, got, want, expectedProjectRoot)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("production JSON value = %#v, want golden %#v", got, want)
 	}
 }
 
-func assertProductionJSONMatchesReferenceGolden(t *testing.T, output []byte, goldenFile string) {
+func assertProductionJSONMatchesReferenceGolden(t *testing.T, output []byte, goldenFile string, expectedProjectRoot string) {
 	t.Helper()
 
 	got := decodeJSONValue(t, output)
 	want := readReferenceGoldenJSONValue(t, goldenFile)
+	alignProjectRoot(t, got, want, expectedProjectRoot)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("production JSON value = %#v, want golden %#v", got, want)
 	}
@@ -1841,11 +2037,12 @@ func readDiscoveryGoldenJSONValue(t *testing.T, goldenFile string) any {
 	return decodeJSONValue(t, payload)
 }
 
-func assertProductionImplementationsJSONMatchesGolden(t *testing.T, output []byte, goldenFile string) {
+func assertProductionImplementationsJSONMatchesGolden(t *testing.T, output []byte, goldenFile string, expectedProjectRoot string) {
 	t.Helper()
 
 	got := decodeJSONValue(t, output)
 	want := readImplementationsGoldenJSONValue(t, goldenFile)
+	alignProjectRoot(t, got, want, expectedProjectRoot)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("production implementations JSON value = %#v, want golden %#v", got, want)
 	}
@@ -1887,6 +2084,43 @@ func decodeJSONValue(t *testing.T, payload []byte) any {
 	}
 
 	return decoded
+}
+
+func alignProjectRoot(t *testing.T, got any, want any, expectedProjectRoot string) {
+	t.Helper()
+
+	gotObject, gotOK := got.(map[string]any)
+	wantObject, wantOK := want.(map[string]any)
+	if !gotOK || !wantOK {
+		return
+	}
+	if expectedProjectRoot == "" {
+		if _, exists := gotObject["project_root"]; exists {
+			t.Fatalf("project_root = %#v, want field absent", gotObject["project_root"])
+		}
+		return
+	}
+	assertProjectRootField(t, gotObject, expectedProjectRoot)
+	wantObject["project_root"] = expectedProjectRoot
+}
+
+func assertProjectRootField(t *testing.T, payload map[string]any, expectedProjectRoot string) {
+	t.Helper()
+
+	if payload["project_root"] != expectedProjectRoot {
+		t.Fatalf("project_root = %#v, want %q", payload["project_root"], expectedProjectRoot)
+	}
+}
+
+func withoutProjectRootHeader(output string) string {
+	if !strings.HasPrefix(output, "# project_root=") {
+		return output
+	}
+	_, rest, found := strings.Cut(output, "\n")
+	if !found {
+		return ""
+	}
+	return rest
 }
 
 func assertStringArrayField(t *testing.T, payload map[string]any, field string, want []string) {
@@ -2049,6 +2283,64 @@ func writeValidSelectedSCIPIndex(t *testing.T, toolName string) string {
 	}
 
 	return writeSelectedIndexBytes(t, indexBytes)
+}
+
+func writeAggregateInputIndex(t *testing.T, repoRoot string, sourceRoot string, relativePath string, symbol string) string {
+	t.Helper()
+
+	indexBytes, err := proto.Marshal(&scip.Index{
+		Metadata: &scip.Metadata{
+			ProjectRoot:          "file://" + filepath.ToSlash(filepath.Join(repoRoot, filepath.FromSlash(sourceRoot))),
+			TextDocumentEncoding: scip.TextEncoding_UTF8,
+			ToolInfo: &scip.ToolInfo{
+				Name:    "scip-typescript",
+				Version: "test",
+			},
+		},
+		Documents: []*scip.Document{
+			{
+				RelativePath: relativePath,
+				Language:     "typescript",
+				Symbols: []*scip.SymbolInformation{
+					{Symbol: symbol, DisplayName: "Fixture"},
+				},
+				Occurrences: []*scip.Occurrence{
+					{
+						Symbol:      symbol,
+						Range:       []int32{1, 2, 3},
+						SymbolRoles: int32(scip.SymbolRole_Definition),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("proto.Marshal(aggregate input) error = %v", err)
+	}
+
+	return writeSelectedIndexBytes(t, indexBytes)
+}
+
+func readSCIPIndex(t *testing.T, path string) *scip.Index {
+	t.Helper()
+
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+	index := &scip.Index{}
+	if err := proto.Unmarshal(payload, index); err != nil {
+		t.Fatalf("proto.Unmarshal(%q) error = %v", path, err)
+	}
+	return index
+}
+
+func aggregateDocumentPaths(index *scip.Index) []string {
+	paths := make([]string, 0, len(index.GetDocuments()))
+	for _, document := range index.GetDocuments() {
+		paths = append(paths, document.GetRelativePath())
+	}
+	return paths
 }
 
 func assertSelectedIndexBytes(t *testing.T, path string, want []byte) {
