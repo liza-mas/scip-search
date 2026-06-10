@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/scip-code/scip/bindings/go/scip"
@@ -87,7 +86,7 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 	externalSymbols := make([]*scip.SymbolInformation, 0)
 	documentPaths := map[string]struct{}{}
 	definitionLocations := map[string]string{}
-	externalBySymbol := map[string][]byte{}
+	externalBySymbol := map[string]struct{}{}
 	var protocolVersion scip.ProtocolVersion
 	var textEncoding scip.TextEncoding
 	var indexerFamily string
@@ -149,17 +148,14 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 		for _, external := range index.GetExternalSymbols() {
 			externalCopy := proto.Clone(external).(*scip.SymbolInformation)
 			symbol := externalCopy.GetSymbol()
-			fingerprint, err := deterministicSymbolBytes(externalCopy)
-			if err != nil {
-				return nil, Result{}, err
-			}
-			if previous, exists := externalBySymbol[symbol]; exists {
-				if !slices.Equal(previous, fingerprint) {
-					return nil, Result{}, NewValidationError(fmt.Sprintf("conflicting external symbol record for %q", symbol))
-				}
+			if scip.IsLocalSymbol(symbol) {
+				externalSymbols = append(externalSymbols, externalCopy)
 				continue
 			}
-			externalBySymbol[symbol] = fingerprint
+			if _, exists := externalBySymbol[symbol]; exists {
+				continue
+			}
+			externalBySymbol[symbol] = struct{}{}
 			externalSymbols = append(externalSymbols, externalCopy)
 		}
 	}
@@ -351,10 +347,6 @@ func rejectOutputInputCollision(outPath string, pairs []Pair) error {
 		}
 	}
 	return nil
-}
-
-func deterministicSymbolBytes(symbol *scip.SymbolInformation) ([]byte, error) {
-	return proto.MarshalOptions{Deterministic: true}.Marshal(symbol)
 }
 
 func recordDefinitionLocation(locations map[string]string, symbol string, aggregatePath string) error {

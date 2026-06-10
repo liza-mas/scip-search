@@ -81,6 +81,46 @@ func TestBuildAllowsRepeatedLocalSymbolsInDifferentDocuments(t *testing.T) {
 	}
 }
 
+func TestBuildDeduplicatesNonLocalExternalSymbolsByIdentity(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	first := writeIndex(t, indexWithExternalDocumentation("AppFoo", "```python\nclass range(__start: SupportsIndex)\n```"))
+	second := writeIndex(t, indexWithExternalDocumentation("DiagnosisFoo", "```python\nclass range(__stop: SupportsIndex)\n```"))
+
+	index, result, err := Build(aggregateOptions(repoRoot, first, second, "apps/api", "services/design-diagnosis"), version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if result.ExternalSymbolCount != 1 {
+		t.Fatalf("external symbol count = %d, want 1", result.ExternalSymbolCount)
+	}
+	if got := index.GetExternalSymbols()[0].GetDocumentation(); !slices.Equal(got, []string{"```python\nclass range(__start: SupportsIndex)\n```"}) {
+		t.Fatalf("external documentation = %q, want first input record", got)
+	}
+}
+
+func TestBuildPreservesRepeatedLocalExternalSymbols(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	first := writeIndex(t, indexWithLocalExternal("FirstLocal"))
+	second := writeIndex(t, indexWithLocalExternal("SecondLocal"))
+
+	index, result, err := Build(aggregateOptions(repoRoot, first, second, "apps/api", "services/design-diagnosis"), version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if result.ExternalSymbolCount != 2 {
+		t.Fatalf("external symbol count = %d, want 2", result.ExternalSymbolCount)
+	}
+	if got := externalDisplayNames(index); !slices.Equal(got, []string{"FirstLocal", "SecondLocal"}) {
+		t.Fatalf("external display names = %v, want both local records preserved", got)
+	}
+}
+
 func TestBuildRejectsInvalidAggregates(t *testing.T) {
 	t.Parallel()
 
@@ -129,15 +169,6 @@ func TestBuildRejectsInvalidAggregates(t *testing.T) {
 				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
 			},
 			want: "symbol collision",
-		},
-		{
-			name: "conflicting external symbol",
-			options: func(t *testing.T) Options {
-				first := writeIndex(t, indexWithExternal("ExternalA"))
-				second := writeIndex(t, indexWithExternal("ExternalB"))
-				return aggregateOptions(repoRoot, first, second, "apps/a", "apps/b")
-			},
-			want: "conflicting external symbol record",
 		},
 		{
 			name: "mixed indexer families",
@@ -209,9 +240,21 @@ func singleDocumentIndex(projectRoot string, relativePath string, symbol string,
 	return index
 }
 
-func indexWithExternal(displayName string) *scip.Index {
-	index := indexWithTool("scip-typescript", "main.ts", "scip-typescript npm example 1.0.0 src/"+displayName+"#")
-	index.ExternalSymbols = []*scip.SymbolInformation{{Symbol: sharedExternal, DisplayName: displayName}}
+func indexWithExternalDocumentation(displayName string, documentation string) *scip.Index {
+	index := indexWithTool("scip-python", "main.py", "scip-python python example 1.0.0 main/"+displayName+"#")
+	index.ExternalSymbols = []*scip.SymbolInformation{{
+		Symbol:        "scip-python python python-stdlib 3.11 builtins/range#",
+		Documentation: []string{documentation},
+	}}
+	return index
+}
+
+func indexWithLocalExternal(displayName string) *scip.Index {
+	index := indexWithTool("scip-python", "main.py", "scip-python python example 1.0.0 main/"+displayName+"#")
+	index.ExternalSymbols = []*scip.SymbolInformation{{
+		Symbol:      "local 4",
+		DisplayName: displayName,
+	}}
 	return index
 }
 
@@ -259,4 +302,12 @@ func documentPaths(index *scip.Index) []string {
 		paths = append(paths, document.GetRelativePath())
 	}
 	return paths
+}
+
+func externalDisplayNames(index *scip.Index) []string {
+	names := make([]string, 0, len(index.GetExternalSymbols()))
+	for _, symbol := range index.GetExternalSymbols() {
+		names = append(names, symbol.GetDisplayName())
+	}
+	return names
 }

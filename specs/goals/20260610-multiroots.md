@@ -57,7 +57,7 @@ scip-search aggregate-index \
 
 `aggregate-index` is not a query command. It reads multiple caller-selected SCIP indexes and writes one aggregate SCIP protobuf index.
 
-`aggregate-index` uses the shared process status conventions where they fit: success exits `0`, malformed command-line shape exits `2`, and an unreadable or invalid input SCIP file exits `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate document paths, root-mapping mismatches, mixed languages, metadata incompatibility, non-local symbol collisions, or output path collisions, exit `4`.
+`aggregate-index` uses the shared process status conventions where they fit: success exits `0`, malformed command-line shape exits `2`, and an unreadable or invalid input SCIP file exits `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate document paths, root-mapping mismatches, mixed languages, metadata incompatibility, non-local definition symbol collisions, or output path collisions, exit `4`.
 
 ### Out of Scope
 
@@ -115,7 +115,7 @@ scip-search aggregate-index \
 - FR-001-3c: When an input `metadata.project_root` is empty, non-file, or otherwise not comparable to the aggregate project root, `aggregate-index` MUST treat the explicit `--root` value as caller-provided mapping data.
 - FR-001-4: The aggregate MUST preserve document symbols, occurrences, relationships, ranges, language fields, and position encodings without semantic rewriting.
 - FR-001-5: The aggregate MUST preserve SCIP symbol strings exactly as emitted by the input indexers.
-- FR-001-6: The aggregate MUST include external symbols from all inputs, deduplicated by exact SCIP symbol string.
+- FR-001-6: The aggregate MUST include external symbols from all inputs. Non-local external symbols MUST be deduplicated by exact SCIP symbol string, keeping the first input record when duplicate metadata differs. Local external symbols MUST be preserved as emitted.
 - FR-001-7: The aggregate SCIP index MUST NOT claim or encode per-input root provenance unless a future spec defines a structured standard-SCIP-compatible storage contract.
 - FR-001-8: The aggregate metadata `tool_info.name` MUST identify `scip-search aggregate-index` as the producer of the aggregate index.
 - FR-001-8a: The aggregate metadata `tool_info.version` MUST identify the current `scip-search` binary version string.
@@ -157,8 +157,8 @@ scip-search aggregate-index \
 - FR-002-3f: The input SCIP indexer family is derived from non-empty `metadata.tool_info.name` values, normalized to the SCIP-producing indexer family such as `scip-typescript`, `scip-python`, or `scip-go`.
 - FR-002-3g: Mixed non-empty `Document.language` values within one indexer family MUST NOT be rejected solely for differing labels.
 - FR-002-4: Aggregation MUST reject duplicate non-local definition symbols that resolve to different aggregate document paths.
-- FR-002-5: Aggregation MUST reject conflicting duplicate external symbol records for the same SCIP symbol string.
-- FR-002-5a: Two duplicate external symbol records conflict when any field other than the SCIP symbol string differs after deterministic protobuf comparison. Identical duplicate records are deduplicated.
+- FR-002-5: Aggregation MUST NOT reject duplicate non-local external symbol records solely because metadata fields differ for the same SCIP symbol string.
+- FR-002-5a: Duplicate non-local external symbol records are deduplicated by exact SCIP symbol string. The first input record is kept deterministically.
 - FR-002-6: On failure, aggregation MUST leave no partial output at the requested output path.
 - FR-002-7: Aggregation MUST reject an `--out` path that resolves to the same path as any input `--index` after path normalization.
 
@@ -172,6 +172,8 @@ scip-search aggregate-index \
 - AC-002-5: Given one input was produced by `scip-python` and another was produced by `scip-typescript`, when aggregation runs, then it fails with a mixed-indexer-family diagnostic.
 - AC-002-6: Given `--out python.scip` resolves to the same filesystem path as one input `--index python.scip`, when aggregation runs, then it fails before opening the output for writing.
 - AC-002-7: Given all inputs were produced by `scip-typescript` and contain a mix of TypeScript, TSX, JavaScript, or declaration-file document language labels, when aggregation runs, then differing document language labels alone do not cause rejection.
+- AC-002-8: Given two inputs contain the same non-local external SCIP symbol with different metadata such as documentation, when aggregation succeeds, then the aggregate contains one external symbol record for that SCIP symbol and keeps the first input record.
+- AC-002-9: Given two inputs contain the same local external SCIP symbol string, when aggregation succeeds, then both local external records are preserved.
 
 ---
 
