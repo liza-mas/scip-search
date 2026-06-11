@@ -114,6 +114,74 @@ func TestBuildAllowsRepeatedLocalSymbolsInDifferentDocuments(t *testing.T) {
 	}
 }
 
+func TestBuildAllowsRepeatedNonLocalDefinitionsWithinOneInputIndex(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	repeatedSymbol := "scip-go gomod github.com/example/project . `github.com/example/project/cmd`/"
+	index := indexWithTool("scip-go", "cluster.go", repeatedSymbol)
+	secondDocument := proto.Clone(index.Documents[0]).(*scip.Document)
+	secondDocument.RelativePath = "create.go"
+	index.Documents = append(index.Documents, secondDocument)
+	input := writeIndex(t, index)
+
+	aggregate, result, err := Build(Options{
+		ProjectRoot: repoRoot,
+		OutPath:     filepath.Join(t.TempDir(), "aggregate.scip"),
+		Pairs: []Pair{
+			{Root: "services/cli/cmd", IndexPath: input},
+		},
+	}, version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got, want := documentPaths(aggregate), []string{"services/cli/cmd/cluster.go", "services/cli/cmd/create.go"}; !slices.Equal(got, want) {
+		t.Fatalf("document paths = %v, want %v", got, want)
+	}
+	if result.DocumentCount != 2 {
+		t.Fatalf("document count = %d, want 2", result.DocumentCount)
+	}
+}
+
+func TestBuildDropsDocumentsThatEscapeAggregateProjectRoot(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	index := indexWithTool("scip-go", "../external/util.go", "scip-go gomod example.com/project . external/Keep#")
+	escapedDocument := proto.Clone(index.Documents[0]).(*scip.Document)
+	escapedDocument.RelativePath = "../../../../../.cache/go-build/generated.go"
+	escapedDocument.Symbols[0].Symbol = "scip-go gomod example.com/project . cache/Drop#"
+	escapedDocument.Occurrences[0].Symbol = escapedDocument.Symbols[0].Symbol
+	index.Documents = append(index.Documents, escapedDocument)
+	input := writeIndex(t, index)
+
+	aggregate, result, err := Build(Options{
+		ProjectRoot: repoRoot,
+		OutPath:     filepath.Join(t.TempDir(), "aggregate.scip"),
+		Pairs: []Pair{
+			{Root: "apps/web/src", IndexPath: input},
+		},
+	}, version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got, want := documentPaths(aggregate), []string{"apps/web/external/util.go"}; !slices.Equal(got, want) {
+		t.Fatalf("document paths = %v, want %v", got, want)
+	}
+	if result.DocumentCount != 1 || len(result.DroppedDocuments) != 1 {
+		t.Fatalf("result = %+v, want 1 kept document and 1 dropped document", result)
+	}
+	if got, want := result.DroppedDocuments, []DroppedDocument{{
+		InputIndex:   0,
+		RelativePath: "../../../../../.cache/go-build/generated.go",
+		Reason:       `document path "../../../../../.cache/go-build/generated.go" escapes aggregate project root`,
+	}}; !slices.Equal(got, want) {
+		t.Fatalf("dropped documents = %+v, want %+v", got, want)
+	}
+}
+
 func TestBuildDeduplicatesNonLocalExternalSymbolsByIdentity(t *testing.T) {
 	t.Parallel()
 

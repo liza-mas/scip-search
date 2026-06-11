@@ -108,7 +108,7 @@ scip-search aggregate-index \
 - FR-001-1i: Relative `--project-root` values MUST be rejected.
 - FR-001-2: For each input document, the aggregate document `relative_path` MUST be rewritten by joining the cleaned input source root with the input document `relative_path`, cleaning the joined path, and emitting the result as a slash-separated path relative to the aggregate project root.
 - FR-001-2a: Joined document paths containing `..` segments MUST be normalized rather than rejected when the cleaned result remains inside the aggregate project root.
-- FR-001-2b: `aggregate-index` MUST reject any cleaned joined document path that escapes the aggregate project root.
+- FR-001-2b: `aggregate-index` MUST drop any input document whose cleaned joined document path escapes the aggregate project root.
 - FR-001-3: The aggregate metadata `project_root` MUST identify the aggregate repository root, not any individual input root.
 - FR-001-3a: The aggregate MUST NOT preserve multiple path-resolution roots in document paths; it MUST convert every document path into the aggregate project-root-relative path space.
 - FR-001-3b: When the aggregate `--project-root` and an input `metadata.project_root` are comparable `file://` URIs, the cleaned `--root` mapping for that input MUST equal the cleaned relative path from the aggregate project root to the input project root.
@@ -127,7 +127,7 @@ scip-search aggregate-index \
 - AC-001-1a2: Given the command `scip-search aggregate-index --project-root /home/me/Workspace/the-repo --root apps/api --index apps/api/index.scip --out python.scip`, when the input index is valid, then the command writes `python.scip` as a valid SCIP protobuf index with paths normalized under `apps/api`.
 - AC-001-1b: Given an input index with `project_root=file:///home/me/Workspace/the-repo/apps/web/src` and `document_path=App.tsx`, when it is aggregated with `--project-root /home/me/Workspace/the-repo --root apps/web/src`, then the aggregate uses `project_root=file:///home/me/Workspace/the-repo` and `document_path=apps/web/src/App.tsx`.
 - AC-001-1c: Given an input index with `project_root=file:///home/me/Workspace/the-repo/apps/web/src` and `document_path=../vite.config.ts`, when it is aggregated with `--project-root /home/me/Workspace/the-repo --root apps/web/src`, then the aggregate emits `document_path=apps/web/vite.config.ts`.
-- AC-001-1d: Given an input document path would clean to a path outside the aggregate project root, when aggregation runs, then it fails before writing output.
+- AC-001-1d: Given an input document path would clean to a path outside the aggregate project root, when aggregation runs, then the aggregate output omits that document and still includes in-root input documents.
 - AC-001-1e: Given an input index has `metadata.project_root=file:///home/me/Workspace/the-repo/apps/web/src`, when aggregation is invoked with `--project-root /home/me/Workspace/the-repo --root apps/web`, then it fails with a root-mapping diagnostic.
 - AC-001-1f: Given `--project-root /home/me/Workspace/the-repo/`, when aggregation succeeds, then aggregate metadata and output metadata use `file:///home/me/Workspace/the-repo`.
 - AC-001-1g: Given `aggregate-index` is invoked with no completed input pairs, when invocation validation runs, then it fails before reading or writing any SCIP files.
@@ -147,7 +147,7 @@ scip-search aggregate-index \
 ### Functional Requirements
 
 - FR-002-1: Aggregation MUST reject duplicate aggregate document paths.
-- FR-002-2: Aggregation MUST reject source root mappings that make an output document path escape the aggregate project root.
+- FR-002-2: Aggregation MUST drop input documents whose source-root mapping makes their output document path escape the aggregate project root.
 - FR-002-2a: Aggregation MUST reject an input whose `metadata.project_root` is a comparable `file://` URI and whose cleaned relative path from the aggregate project root does not equal the cleaned `--root` value, with a root-mapping diagnostic.
 - FR-002-3: Aggregation MUST reject mixed non-empty SCIP indexer families across all inputs.
 - FR-002-3a: Aggregation MUST reject incompatible input metadata when one aggregate metadata value cannot represent all inputs.
@@ -157,7 +157,8 @@ scip-search aggregate-index \
 - FR-002-3e: Input `metadata.tool_info` values are not required to match because the aggregate metadata `tool_info` identifies `scip-search aggregate-index` as the producer.
 - FR-002-3f: The input SCIP indexer family is derived from non-empty `metadata.tool_info.name` values, normalized to the SCIP-producing indexer family such as `scip-typescript`, `scip-python`, or `scip-go`.
 - FR-002-3g: Mixed non-empty `Document.language` values within one indexer family MUST NOT be rejected solely for differing labels.
-- FR-002-4: Aggregation MUST reject duplicate non-local definition symbols that resolve to different aggregate document paths.
+- FR-002-4: Aggregation MUST reject duplicate non-local definition symbols that resolve to different aggregate document paths across different input indexes.
+- FR-002-4a: Aggregation MUST preserve duplicate non-local definition symbols that are already present within one valid input index.
 - FR-002-5: Aggregation MUST NOT reject duplicate non-local external symbol records solely because metadata fields differ for the same SCIP symbol string.
 - FR-002-5a: Duplicate non-local external symbol records are deduplicated by exact SCIP symbol string. The first input record is kept deterministically.
 - FR-002-6: On failure, aggregation MUST leave no partial output at the requested output path.
@@ -166,8 +167,9 @@ scip-search aggregate-index \
 ### Acceptance Criteria
 
 - AC-002-1: Given two inputs both contain `src/main.ts` and both are mapped to the same source root, when aggregation runs, then it fails with a duplicate document path diagnostic.
-- AC-002-2: Given an input would produce `../outside.py` or an absolute aggregate-relative document path, when aggregation runs, then it fails before writing output.
+- AC-002-2: Given an input would produce `../outside.py` or an absolute aggregate-relative document path, when aggregation runs, then the aggregate output omits that document.
 - AC-002-3: Given two inputs define the same non-local SCIP symbol in different aggregate document paths, when aggregation runs, then it fails with a symbol collision diagnostic.
+- AC-002-3a: Given one valid input index already contains the same non-local definition symbol in different document paths, when aggregation normalizes that input into the aggregate path space, then it succeeds.
 - AC-002-4: Given aggregation fails for any validation error and the requested output path did not exist before invocation, when the process exits, then the requested output path remains absent.
 - AC-002-4a: Given aggregation fails for any validation error and the requested output path existed before invocation, when the process exits, then the requested output path contents are unchanged.
 - AC-002-5: Given one input was produced by `scip-python` and another was produced by `scip-typescript`, when aggregation runs, then it fails with a mixed-indexer-family diagnostic.

@@ -31,11 +31,23 @@ type Options struct {
 
 type Result struct {
 	DocumentCount       int
+	DroppedDocuments    []DroppedDocument
 	ExternalSymbolCount int
+}
+
+type DroppedDocument struct {
+	InputIndex   int
+	RelativePath string
+	Reason       string
 }
 
 type ValidationError struct {
 	message string
+}
+
+type definitionLocation struct {
+	inputIndex    int
+	aggregatePath string
 }
 
 func NewValidationError(message string) ValidationError {
@@ -85,8 +97,9 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 	documents := make([]*scip.Document, 0)
 	externalSymbols := make([]*scip.SymbolInformation, 0)
 	documentPaths := map[string]struct{}{}
-	definitionLocations := map[string]string{}
+	definitionLocations := map[string]definitionLocation{}
 	externalBySymbol := map[string]struct{}{}
+	droppedDocuments := make([]DroppedDocument, 0)
 	var protocolVersion scip.ProtocolVersion
 	var textEncoding scip.TextEncoding
 	var indexerFamily string
@@ -122,7 +135,12 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 			documentCopy := proto.Clone(document).(*scip.Document)
 			aggregatePath, err := aggregateDocumentPath(sourceRoot, document.GetRelativePath())
 			if err != nil {
-				return nil, Result{}, err
+				droppedDocuments = append(droppedDocuments, DroppedDocument{
+					InputIndex:   inputIndex,
+					RelativePath: document.GetRelativePath(),
+					Reason:       err.Error(),
+				})
+				continue
 			}
 			if _, exists := documentPaths[aggregatePath]; exists {
 				return nil, Result{}, NewValidationError(fmt.Sprintf("duplicate aggregate document path %q", aggregatePath))
@@ -131,7 +149,7 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 			documentCopy.RelativePath = aggregatePath
 			documents = append(documents, documentCopy)
 			for _, symbolInfo := range documentCopy.GetSymbols() {
-				if err := recordDefinitionLocation(definitionLocations, symbolInfo.GetSymbol(), aggregatePath); err != nil {
+				if err := recordDefinitionLocation(definitionLocations, symbolInfo.GetSymbol(), inputIndex, aggregatePath); err != nil {
 					return nil, Result{}, err
 				}
 			}
@@ -139,7 +157,7 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 				if occurrence.GetSymbol() == "" || !isDefinition(occurrence) {
 					continue
 				}
-				if err := recordDefinitionLocation(definitionLocations, occurrence.GetSymbol(), aggregatePath); err != nil {
+				if err := recordDefinitionLocation(definitionLocations, occurrence.GetSymbol(), inputIndex, aggregatePath); err != nil {
 					return nil, Result{}, err
 				}
 			}
@@ -174,6 +192,7 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 			ExternalSymbols: externalSymbols,
 		}, Result{
 			DocumentCount:       len(documents),
+			DroppedDocuments:    droppedDocuments,
 			ExternalSymbolCount: len(externalSymbols),
 		}, nil
 }
@@ -349,17 +368,22 @@ func rejectOutputInputCollision(outPath string, pairs []Pair) error {
 	return nil
 }
 
-func recordDefinitionLocation(locations map[string]string, symbol string, aggregatePath string) error {
+func recordDefinitionLocation(locations map[string]definitionLocation, symbol string, inputIndex int, aggregatePath string) error {
 	if symbol == "" {
 		return nil
 	}
 	if scip.IsLocalSymbol(symbol) {
 		return nil
 	}
-	if previous, exists := locations[symbol]; exists && previous != aggregatePath {
-		return NewValidationError(fmt.Sprintf("symbol collision for %q between %q and %q", symbol, previous, aggregatePath))
+	if previous, exists := locations[symbol]; exists {
+		// Duplicate aggregate paths are rejected before this check, so
+		// cross-input/same-path definitions cannot silently merge here.
+		if previous.inputIndex != inputIndex && previous.aggregatePath != aggregatePath {
+			return NewValidationError(fmt.Sprintf("symbol collision for %q between %q and %q", symbol, previous.aggregatePath, aggregatePath))
+		}
+		return nil
 	}
-	locations[symbol] = aggregatePath
+	locations[symbol] = definitionLocation{inputIndex: inputIndex, aggregatePath: aggregatePath}
 	return nil
 }
 

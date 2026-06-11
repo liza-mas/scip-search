@@ -70,7 +70,7 @@ Aggregation fails without replacing the output file when it detects:
 - duplicate aggregate document paths
 - source-root mappings that conflict with comparable input `metadata.project_root` values
 - mixed input indexer families, such as combining `scip-python` and `scip-typescript`
-- duplicate non-local definition symbols that resolve to different aggregate document paths
+- duplicate non-local definition symbols that resolve to different aggregate document paths across different input indexes
 - output paths that resolve to one of the input index paths
 
 Malformed `aggregate-index` command lines exit `2`; unreadable or invalid input SCIP files exit `3`; aggregation validation failures exit `4`.
@@ -89,6 +89,7 @@ Malformed `aggregate-index` command lines exit `2`; unreadable or invalid input 
 ## Known Limitations
 
 - Aggregation is same-language only; build one aggregate index per language.
+- Input documents whose aggregate path would escape the aggregate project root are dropped because they cannot be resolved in the output path space.
 - `aggregate-index` does not run language indexers, discover roots, infer imports, rewrite symbols, or repair mismatched package identities.
 - Cross-root references are available only when input indexes already use matching SCIP symbol identities.
 - Aggregate indexes do not preserve per-input source provenance or section query results by original root.
