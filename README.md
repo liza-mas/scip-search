@@ -236,7 +236,7 @@ Valid SCIP input from any supported SCIP-producing language is loaded through th
 
 ### Multi-root aggregation
 
-`aggregate-index` is a pre-query artifact generation command. It reads two or more already-generated same-language SCIP protobuf indexes and writes one standard SCIP protobuf index. Query commands still accept exactly one `--index`; they do not discover roots or aggregate at query time.
+`aggregate-index` is a pre-query artifact generation command. It reads one or more already-generated same-language SCIP protobuf indexes and writes one standard SCIP protobuf index. Query commands still accept exactly one `--index`; they do not discover roots or aggregate at query time.
 
 Each input pair supplies the repository-relative source root that the input index was generated from:
 
@@ -248,9 +248,9 @@ scip-search aggregate-index \
   --out python.scip
 ```
 
-The aggregate output metadata uses the supplied aggregate `--project-root`, and every document path is rewritten into that project-root-relative path space, for example `apps/api/server.py` and `services/some-service/worker.py`. If an input index has a comparable `file://` metadata project root, the supplied `--root` must match its relative path from the aggregate project root. `--project-root` accepts an absolute filesystem path or `file://` URI. `--root` values are slash-separated paths relative to the aggregate project root; `.` means the aggregate project root itself.
+The aggregate output metadata uses the supplied aggregate `--project-root`, and every document path is rewritten into that project-root-relative path space, for example `apps/api/server.py` and `services/some-service/worker.py`. A single `--root`/`--index` pair is valid when you only need to normalize one index into the aggregate project-root path space. If an input index has a comparable `file://` metadata project root, the supplied `--root` must match its relative path from the aggregate project root. `--project-root` accepts an absolute filesystem path or `file://` URI. `--root` values are slash-separated paths relative to the aggregate project root; `.` means the aggregate project root itself.
 
-Aggregation preserves SCIP symbol strings exactly. Cross-root references are available only when the input indexes already use matching SCIP symbol identities. Local SCIP symbols such as `local 4` are document-scoped and may repeat across aggregate documents. Non-local external symbols are deduplicated by exact SCIP symbol string, keeping the first input record when metadata such as hover documentation differs. Local external symbols are preserved as emitted. `aggregate-index` does not run language indexers, discover roots, infer imports, rewrite symbols, or repair mismatched package identities.
+Aggregation preserves SCIP symbol strings exactly. Cross-root references are available only when multiple input indexes already use matching SCIP symbol identities. Local SCIP symbols such as `local 4` are document-scoped and may repeat across aggregate documents. Non-local external symbols are deduplicated by exact SCIP symbol string, keeping the first input record when metadata such as hover documentation differs. Local external symbols are preserved as emitted. `aggregate-index` does not run language indexers, discover roots, infer imports, rewrite symbols, or repair mismatched package identities.
 
 Malformed `aggregate-index` command lines exit `2`. Unreadable or invalid input SCIP files exit `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate output document paths, root-mapping mismatches, mixed indexer families, non-local definition symbol collisions, or an output path that resolves to an input path, exit `4` and leave any existing output file unchanged.
 

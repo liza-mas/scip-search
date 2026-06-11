@@ -55,7 +55,7 @@ scip-search aggregate-index \
   --out python.scip
 ```
 
-`aggregate-index` is not a query command. It reads multiple caller-selected SCIP indexes and writes one aggregate SCIP protobuf index.
+`aggregate-index` is not a query command. It reads one or more caller-selected SCIP indexes and writes one aggregate SCIP protobuf index.
 
 `aggregate-index` uses the shared process status conventions where they fit: success exits `0`, malformed command-line shape exits `2`, and an unreadable or invalid input SCIP file exits `3`. Aggregation validation failures after all inputs are readable SCIP data, such as duplicate document paths, root-mapping mismatches, mixed languages, metadata incompatibility, non-local definition symbol collisions, or output path collisions, exit `4`.
 
@@ -95,14 +95,14 @@ scip-search aggregate-index \
 
 ### Functional Requirements
 
-- FR-001-1: The aggregation interface MUST accept a repository project root, an output path, and two or more input pairs where each pair has an input SCIP index path and a source root path.
+- FR-001-1: The aggregation interface MUST accept a repository project root, an output path, and one or more input pairs where each pair has an input SCIP index path and a source root path.
 - FR-001-1a: The aggregation interface MUST be exposed as `scip-search aggregate-index`.
 - FR-001-1b: `aggregate-index` MUST accept `--project-root <path-or-file-uri>`, `--out <output-scip-path>`, and repeated adjacent `--root <repo-relative-root> --index <input-scip-path>` pairs.
 - FR-001-1c: `aggregate-index` MUST reject an unpaired `--root` or `--index`, including a sequence where two `--root` flags or two `--index` flags appear without completing a pair.
 - FR-001-1d: `--root` values MUST be slash-separated paths relative to the aggregate project root; `.` is allowed for the aggregate project root itself.
 - FR-001-1e: `aggregate-index` MUST reject `--root` values that are empty strings, absolute paths, or paths that escape the aggregate project root after path cleaning.
 - FR-001-1f: `aggregate-index` MUST treat trailing slashes and redundant `.` path segments in `--root` values as equivalent after path cleaning.
-- FR-001-1f2: `aggregate-index` MUST reject invocations with fewer than two completed `--root <root> --index <path>` input pairs.
+- FR-001-1f2: `aggregate-index` MUST reject invocations with no completed `--root <root> --index <path>` input pairs.
 - FR-001-1g: `--project-root` MUST be accepted only as an absolute filesystem path or a `file://` URI.
 - FR-001-1h: `--project-root` MUST be cleaned, converted to a SCIP `file://` URI for aggregate metadata and output metadata, and emitted without a trailing slash except for filesystem root.
 - FR-001-1i: Relative `--project-root` values MUST be rejected.
@@ -124,12 +124,13 @@ scip-search aggregate-index \
 
 - AC-001-1: Given two valid same-language input indexes rooted at `apps/api` and `services/some-service`, when aggregation succeeds, then the output index contains documents whose paths are prefixed with `apps/api/` and `services/some-service/`.
 - AC-001-1a: Given the command `scip-search aggregate-index --project-root /home/me/Workspace/the-repo --root apps/api --index apps/api/index.scip --root services/some-service --index services/some-service/index.scip --out python.scip`, when both input indexes are valid, then the command writes `python.scip` as a valid SCIP protobuf index.
+- AC-001-1a2: Given the command `scip-search aggregate-index --project-root /home/me/Workspace/the-repo --root apps/api --index apps/api/index.scip --out python.scip`, when the input index is valid, then the command writes `python.scip` as a valid SCIP protobuf index with paths normalized under `apps/api`.
 - AC-001-1b: Given an input index with `project_root=file:///home/me/Workspace/the-repo/apps/web/src` and `document_path=App.tsx`, when it is aggregated with `--project-root /home/me/Workspace/the-repo --root apps/web/src`, then the aggregate uses `project_root=file:///home/me/Workspace/the-repo` and `document_path=apps/web/src/App.tsx`.
 - AC-001-1c: Given an input index with `project_root=file:///home/me/Workspace/the-repo/apps/web/src` and `document_path=../vite.config.ts`, when it is aggregated with `--project-root /home/me/Workspace/the-repo --root apps/web/src`, then the aggregate emits `document_path=apps/web/vite.config.ts`.
 - AC-001-1d: Given an input document path would clean to a path outside the aggregate project root, when aggregation runs, then it fails before writing output.
 - AC-001-1e: Given an input index has `metadata.project_root=file:///home/me/Workspace/the-repo/apps/web/src`, when aggregation is invoked with `--project-root /home/me/Workspace/the-repo --root apps/web`, then it fails with a root-mapping diagnostic.
 - AC-001-1f: Given `--project-root /home/me/Workspace/the-repo/`, when aggregation succeeds, then aggregate metadata and output metadata use `file:///home/me/Workspace/the-repo`.
-- AC-001-1g: Given `aggregate-index` is invoked with fewer than two completed input pairs, when invocation validation runs, then it fails before reading or writing any SCIP files.
+- AC-001-1g: Given `aggregate-index` is invoked with no completed input pairs, when invocation validation runs, then it fails before reading or writing any SCIP files.
 - AC-001-2: Given the aggregate output is passed to `scip-search packages --index <output>`, when the command runs, then it loads through the existing SCIP loader rather than a custom aggregate reader.
 - AC-001-3: Given an input symbol string appears in an occurrence or relationship, when aggregation succeeds, then that symbol string is byte-for-byte unchanged in the output index.
 

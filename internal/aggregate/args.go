@@ -65,8 +65,8 @@ func ParseArgs(args []string) (Options, error) {
 	if strings.TrimSpace(options.OutPath) == "" {
 		return Options{}, NewValidationError("missing --out")
 	}
-	if len(options.Pairs) < 2 {
-		return Options{}, NewValidationError("aggregate-index requires at least two --root/--index input pairs")
+	if len(options.Pairs) < 1 {
+		return Options{}, NewValidationError("aggregate-index requires at least one --root/--index input pair")
 	}
 	if _, _, err := normalizeProjectRoot(options.ProjectRoot); err != nil {
 		return Options{}, err

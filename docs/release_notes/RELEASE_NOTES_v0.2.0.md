@@ -8,7 +8,7 @@ This release also exposes selected-index project-root metadata in path-bearing q
 
 ## Highlights
 
-- New `aggregate-index` command builds one standard SCIP index from multiple same-language input indexes
+- New `aggregate-index` command builds one standard SCIP index from one or more same-language input indexes
 - Aggregate document paths are rewritten into one repository-root-relative path space under the supplied `--project-root`
 - Path-bearing query outputs now expose the loaded index project root once per output
 - Aggregate validation rejects ambiguous or corrupt outputs before replacing the requested output file
@@ -19,7 +19,7 @@ This release also exposes selected-index project-root metadata in path-bearing q
 
 ## New Command: aggregate-index
 
-`aggregate-index` is a pre-query artifact generation command. It reads two or more already-generated same-language SCIP protobuf indexes and writes one aggregate SCIP protobuf index:
+`aggregate-index` is a pre-query artifact generation command. It reads one or more already-generated same-language SCIP protobuf indexes and writes one aggregate SCIP protobuf index:
 
 ```bash
 scip-search aggregate-index \
@@ -36,7 +36,7 @@ scip-search symbols --index python.scip --name Handler
 scip-search references --index python.scip --name Handler --one-line
 ```
 
-`--project-root` accepts an absolute filesystem path or `file://` URI. Each `--root` value is a slash-separated path relative to that aggregate project root; `.` identifies the project root itself.
+`--project-root` accepts an absolute filesystem path or `file://` URI. Each `--root` value is a slash-separated path relative to that aggregate project root; `.` identifies the project root itself. A single input pair is valid when the caller only needs to normalize one index into the aggregate project-root path space.
 
 ---
 
@@ -64,7 +64,7 @@ Path-bearing JSON query payloads include top-level `project_root`. `graph-export
 
 Aggregation fails without replacing the output file when it detects:
 
-- fewer than two completed `--root <root> --index <path>` input pairs
+- no completed `--root <root> --index <path>` input pairs
 - invalid `--project-root`, invalid `--root`, or malformed flag ordering
 - unreadable or invalid input SCIP files
 - duplicate aggregate document paths

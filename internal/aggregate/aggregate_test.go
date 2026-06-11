@@ -61,6 +61,39 @@ func TestBuildRewritesPathsAndMetadataIntoAggregateProjectRoot(t *testing.T) {
 	}
 }
 
+func TestBuildRewritesSingleIndexIntoAggregateProjectRoot(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	input := writeIndex(t, singleDocumentIndex(
+		"file://"+filepath.ToSlash(filepath.Join(repoRoot, "apps", "web", "src")),
+		"../vite.config.ts",
+		targetSymbol,
+		sharedExternal,
+	))
+
+	index, result, err := Build(Options{
+		ProjectRoot: repoRoot,
+		OutPath:     filepath.Join(t.TempDir(), "aggregate.scip"),
+		Pairs: []Pair{
+			{Root: "apps/web/src", IndexPath: input},
+		},
+	}, version.BuildIdentity{})
+
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if index.GetMetadata().GetProjectRoot() != "file://"+filepath.ToSlash(repoRoot) {
+		t.Fatalf("project_root = %q, want aggregate repo root", index.GetMetadata().GetProjectRoot())
+	}
+	if got, want := documentPaths(index), []string{"apps/web/vite.config.ts"}; !slices.Equal(got, want) {
+		t.Fatalf("document paths = %v, want %v", got, want)
+	}
+	if result.DocumentCount != 1 || result.ExternalSymbolCount != 1 {
+		t.Fatalf("result = %+v, want 1 document and 1 external", result)
+	}
+}
+
 func TestBuildAllowsRepeatedLocalSymbolsInDifferentDocuments(t *testing.T) {
 	t.Parallel()
 

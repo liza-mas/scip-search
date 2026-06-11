@@ -74,8 +74,8 @@ func Build(options Options, buildIdentity version.BuildIdentity) (*scip.Index, R
 	if strings.TrimSpace(options.OutPath) == "" {
 		return nil, Result{}, NewValidationError("missing --out")
 	}
-	if len(options.Pairs) < 2 {
-		return nil, Result{}, NewValidationError("aggregate-index requires at least two --root/--index input pairs")
+	if len(options.Pairs) < 1 {
+		return nil, Result{}, NewValidationError("aggregate-index requires at least one --root/--index input pair")
 	}
 	if err := rejectOutputInputCollision(options.OutPath, options.Pairs); err != nil {
 		return nil, Result{}, err

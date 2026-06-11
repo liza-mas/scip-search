@@ -49,7 +49,7 @@ Commands:
   callees          Show static outgoing dependencies for symbols.
   impact           Show static review, dependency, and test hints for symbols.
   graph-export     Export the factual SCIP symbol graph as JSON.
-  aggregate-index  Build one standard SCIP index from multiple same-language input indexes.
+  aggregate-index  Build one standard SCIP index from one or more same-language input indexes.
 
 Output:
   --one-line     Grep-style text output; default for all query commands.

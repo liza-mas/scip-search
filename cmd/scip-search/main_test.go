@@ -103,7 +103,7 @@ func TestRunHelpUsesSharedRuntimeBeforeQueryValidation(t *testing.T) {
 		"scip-search graph-export --index <index-path> [--symbol <scip-symbol>]... [--name <name>]... [--package-prefix <prefix>]... [-o <path>]",
 		"scip-search aggregate-index --project-root <path-or-file-uri>",
 		"graph-export     Export the factual SCIP symbol graph as JSON.",
-		"aggregate-index  Build one standard SCIP index from multiple same-language input indexes.",
+		"aggregate-index  Build one standard SCIP index from one or more same-language input indexes.",
 		"Output:",
 		"--one-line     Grep-style text output; default for all query commands.",
 		"--markdown     Multi-line Markdown text for graph and impact commands.",
@@ -1163,6 +1163,42 @@ func TestRunAggregateIndexWritesValidAggregateSCIP(t *testing.T) {
 	}
 }
 
+func TestRunAggregateIndexRewritesSingleInputSCIP(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	input := writeAggregateInputIndex(t, repoRoot, "apps/web/src", "../vite.config.ts", "scip-typescript npm example 1.0.0 web/Config#")
+	outPath := filepath.Join(t.TempDir(), "typescript.scip")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	status := run([]string{
+		"aggregate-index",
+		"--project-root",
+		repoRoot,
+		"--root",
+		"apps/web/src",
+		"--index",
+		input,
+		"--out",
+		outPath,
+	}, &stdout, &stderr)
+
+	if status != runtimecontract.StatusOK {
+		t.Fatalf("aggregate-index status = %d, want %d; stderr = %q", status, runtimecontract.StatusOK, stderr.String())
+	}
+	if stdout.String() != "" || stderr.String() != "" {
+		t.Fatalf("stdout = %q stderr = %q, want both empty", stdout.String(), stderr.String())
+	}
+	aggregateIndex := readSCIPIndex(t, outPath)
+	if aggregateIndex.GetMetadata().GetProjectRoot() != "file://"+filepath.ToSlash(repoRoot) {
+		t.Fatalf("aggregate project_root = %q, want repo root", aggregateIndex.GetMetadata().GetProjectRoot())
+	}
+	if got, want := aggregateDocumentPaths(aggregateIndex), []string{"apps/web/vite.config.ts"}; !slices.Equal(got, want) {
+		t.Fatalf("aggregate document paths = %v, want %v", got, want)
+	}
+}
+
 func TestRunAggregateIndexStatusMapping(t *testing.T) {
 	t.Parallel()
 
@@ -1177,6 +1213,11 @@ func TestRunAggregateIndexStatusMapping(t *testing.T) {
 		{
 			name:   "malformed pairs are usage",
 			args:   []string{"aggregate-index", "--project-root", repoRoot, "--root", "apps/a", "--out", filepath.Join(t.TempDir(), "out.scip")},
+			status: runtimecontract.StatusUsage,
+		},
+		{
+			name:   "missing pairs are usage",
+			args:   []string{"aggregate-index", "--project-root", repoRoot, "--out", filepath.Join(t.TempDir(), "out.scip")},
 			status: runtimecontract.StatusUsage,
 		},
 		{
